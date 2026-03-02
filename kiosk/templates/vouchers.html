@@ -1,0 +1,275 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vouchers disponibles</title>
+  <link rel="stylesheet" href="{% static 'style/style.css' %}">
+</head>
+<body class="page-vouchers">
+  <main class="kiosk-shell" id="screen">
+    <div class="kiosk-brand">FENDT</div>
+
+    {% if error %}
+      <div class="error-box">{{ error }}</div>
+      <section class="kiosk-center">
+        <button class="kiosk-button secondary" onclick="window.location.href='{% url 'kiosk:dni' %}'">Volver</button>
+      </section>
+    {% elif persona %}
+      <h1 class="welcome-title">Bienvenido</h1>
+      <p class="welcome-name">{{ persona.nombre_apellido }}</p>
+      <p class="voucher-copy">Elegí 1, 2 o 3 vouchers</p>
+
+      <section class="voucher-list">
+        {% for v in vouchers %}
+          <button
+            class="kiosk-button voucher-btn"
+            data-voucher="{{ v.codigo }}"
+            data-usados="{{ v.usados }}"
+            data-cupo="{{ v.cupo_por_dia }}"
+            {% if v.agotado %}disabled{% endif %}
+          >
+            <span>{{ v.codigo }}</span>
+            <span class="voucher-quota" data-role="quota">{{ v.usados }}/{{ v.cupo_por_dia }}</span>
+          </button>
+        {% endfor %}
+      </section>
+
+      <p class="selection-info" id="selected-count">0 seleccionados</p>
+      <div class="notice" id="notice"></div>
+
+      <section class="voucher-actions">
+        <button class="kiosk-button" id="confirm-selection" disabled>Imprimir selección</button>
+        <button class="kiosk-button secondary" id="finalize-selection">Finalizar e imprimir</button>
+        <button class="kiosk-button secondary" onclick="window.location.href='{% url 'kiosk:dni' %}'">Otro DNI</button>
+      </section>
+    {% endif %}
+
+    <section class="flow-screen hidden" id="flow-printing">
+      <div class="kiosk-brand">FENDT</div>
+      <h2>Imprimiendo vouchers</h2>
+      <p id="flow-printing-text">Retirá tus tickets del tótem.</p>
+      <button class="kiosk-button" id="print-now">Imprimir último</button>
+    </section>
+  </main>
+
+  <script>
+    const idleMs = {{ idle_seconds }} * 1000;
+    const startUrl = "{% url 'kiosk:start' %}";
+    let idleTimer;
+    let pendingPrintUrl = null;
+    let processing = false;
+
+    const selectedVouchers = new Set();
+
+    const resetIdle = () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        window.location.href = startUrl;
+      }, idleMs);
+    };
+
+    ["click", "touchstart", "keydown"].forEach((eventName) => {
+      document.addEventListener(eventName, resetIdle, { passive: true });
+    });
+
+    const notice = document.getElementById("notice");
+    const selectedCount = document.getElementById("selected-count");
+    const buttons = document.querySelectorAll(".voucher-btn[data-voucher]");
+    const flowPrinting = document.getElementById("flow-printing");
+    const flowPrintingText = document.getElementById("flow-printing-text");
+    const printNowBtn = document.getElementById("print-now");
+    const confirmBtn = document.getElementById("confirm-selection");
+    const finalizeBtn = document.getElementById("finalize-selection");
+
+    function openPrintWindow() {
+      if (!pendingPrintUrl) return;
+      window.open(pendingPrintUrl, "ticket", "width=380,height=640");
+    }
+
+    function showFlow(target, message = "Retirá tus tickets del tótem.") {
+      flowPrinting.classList.add("hidden");
+      if (target === "printing") {
+        flowPrintingText.textContent = message;
+        flowPrinting.classList.remove("hidden");
+      }
+    }
+
+    function updateSelectionInfo() {
+      if (selectedCount) {
+        const count = selectedVouchers.size;
+        selectedCount.textContent = `${count} seleccionado${count === 1 ? "" : "s"}`;
+      }
+      if (confirmBtn) {
+        confirmBtn.disabled = processing || selectedVouchers.size === 0;
+      }
+      if (finalizeBtn) {
+        finalizeBtn.disabled = processing;
+      }
+    }
+
+    function updateVoucherButton(button) {
+      const usados = Number(button.dataset.usados || "0");
+      const cupo = Number(button.dataset.cupo || "0");
+      const quota = button.querySelector("[data-role='quota']");
+
+      if (quota) {
+        quota.textContent = `${usados}/${cupo}`;
+      }
+
+      const agotado = usados >= cupo;
+      button.disabled = processing || agotado;
+      if (agotado) {
+        selectedVouchers.delete(button.dataset.voucher);
+        button.classList.remove("selected");
+      }
+    }
+
+    function setVoucherButtonsEnabled(enabled) {
+      buttons.forEach((button) => {
+        const usados = Number(button.dataset.usados || "0");
+        const cupo = Number(button.dataset.cupo || "0");
+        const agotado = usados >= cupo;
+        button.disabled = !enabled || agotado;
+      });
+    }
+
+    function allQuotasExhausted() {
+      return Array.from(buttons).every((button) => {
+        const usados = Number(button.dataset.usados || "0");
+        const cupo = Number(button.dataset.cupo || "0");
+        return usados >= cupo;
+      });
+    }
+
+    async function redeemOne(voucherCode) {
+      const response = await fetch("{% url 'api:redeem' %}", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dni: "{{ persona.dni|default:'' }}",
+          voucher: voucherCode,
+          totem_id: "{{ totem_id }}",
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data?.error?.message || "No se pudo emitir el voucher.");
+      }
+      return data;
+    }
+
+    async function processSelection(options = {}) {
+      const goToStart = options.goToStart || false;
+      if (processing) return;
+      if (selectedVouchers.size === 0) {
+        if (goToStart) {
+          window.location.href = startUrl;
+        } else {
+          notice.textContent = "Seleccioná al menos un voucher.";
+        }
+        return;
+      }
+
+      processing = true;
+      setVoucherButtonsEnabled(false);
+      updateSelectionInfo();
+      notice.textContent = "Procesando selección...";
+
+      const selectedButtons = Array.from(buttons).filter((button) =>
+        selectedVouchers.has(button.dataset.voucher)
+      );
+
+      const total = selectedButtons.length;
+      let ok = 0;
+      const errors = [];
+
+      for (let index = 0; index < selectedButtons.length; index += 1) {
+        const button = selectedButtons[index];
+        const voucherCode = button.dataset.voucher;
+
+        showFlow("printing", `Imprimiendo ${index + 1} de ${total}...`);
+
+        try {
+          const data = await redeemOne(voucherCode);
+          pendingPrintUrl = data.ticket.print_url;
+          openPrintWindow();
+
+          button.dataset.usados = String(Number(button.dataset.usados || "0") + 1);
+          button.classList.remove("selected");
+          selectedVouchers.delete(voucherCode);
+          updateVoucherButton(button);
+          ok += 1;
+        } catch (error) {
+          button.classList.remove("selected");
+          selectedVouchers.delete(voucherCode);
+          errors.push(`${voucherCode}: ${error.message}`);
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 220));
+      }
+
+      showFlow();
+      processing = false;
+      setVoucherButtonsEnabled(true);
+      buttons.forEach((button) => updateVoucherButton(button));
+      updateSelectionInfo();
+
+      if (errors.length === 0) {
+        if (allQuotasExhausted()) {
+          notice.textContent = "Cupos agotados para hoy.";
+        } else {
+          notice.textContent = `${ok} ticket(s) generado(s). Podés volver a seleccionar.`;
+        }
+      } else {
+        notice.textContent = `Generados: ${ok}. Errores: ${errors.join(" | ")}`;
+      }
+
+      if (goToStart) {
+        notice.textContent = `${notice.textContent} Finalizando...`;
+        window.setTimeout(() => {
+          window.location.href = startUrl;
+        }, 1300);
+      }
+    }
+
+    if (printNowBtn) {
+      printNowBtn.addEventListener("click", () => {
+        openPrintWindow();
+        showFlow();
+      });
+    }
+
+    if (confirmBtn) {
+      confirmBtn.addEventListener("click", processSelection);
+    }
+
+    if (finalizeBtn) {
+      finalizeBtn.addEventListener("click", () => processSelection({ goToStart: true }));
+    }
+
+    buttons.forEach((button) => {
+      updateVoucherButton(button);
+      button.addEventListener("click", () => {
+        if (button.disabled || processing) return;
+
+        const code = button.dataset.voucher;
+        if (selectedVouchers.has(code)) {
+          selectedVouchers.delete(code);
+          button.classList.remove("selected");
+        } else {
+          selectedVouchers.add(code);
+          button.classList.add("selected");
+        }
+
+        updateSelectionInfo();
+      });
+    });
+
+    updateSelectionInfo();
+    resetIdle();
+  </script>
+</body>
+</html>

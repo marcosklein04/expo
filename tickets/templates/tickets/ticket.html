@@ -1,0 +1,44 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ticket {{ ticket.ticket_numero }}</title>
+  <link rel="stylesheet" href="{% static 'style/style.css' %}">
+</head>
+<body class="page-ticket">
+  <main class="ticket">
+    <section class="center">
+      <h1>Expo 3 Días</h1>
+      <div class="meta">Voucher de comida</div>
+    </section>
+
+    <section class="meta">
+      <div><strong>Nombre:</strong> {{ ticket.persona.nombre_apellido }}</div>
+      <div><strong>DNI:</strong> {{ ticket.persona.dni }}</div>
+      <div><strong>Credencial:</strong> {{ ticket.persona.credencial|default:'-' }}</div>
+      <div><strong>Concesionario:</strong> {{ ticket.persona.concesionario|default:'-' }}</div>
+    </section>
+
+    <section class="voucher">{{ ticket.voucher_tipo.codigo }}</section>
+
+    <section class="meta">
+      <div><strong>Día:</strong> {{ ticket.dia|date:'Y-m-d' }}</div>
+      <div><strong>Hora:</strong> {{ ticket.creado_en|date:'Y-m-d H:i:s' }}</div>
+      <div><strong>Tótem:</strong> {{ ticket.totem_id }}</div>
+    </section>
+
+    <section class="tiny center">
+      <div>{{ ticket.ticket_numero }}</div>
+      <div>Conserve este ticket para validación</div>
+    </section>
+  </main>
+
+  <script>
+    window.addEventListener("load", () => {
+      window.setTimeout(() => window.print(), 120);
+    });
+  </script>
+</body>
+</html>

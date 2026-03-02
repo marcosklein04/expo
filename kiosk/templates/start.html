@@ -1,0 +1,29 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Expo Kiosco</title>
+  <link rel="stylesheet" href="{% static 'style/style.css' %}">
+</head>
+<body class="page-start">
+  <main class="kiosk-shell" id="start-screen">
+    <div class="kiosk-brand">FENDT</div>
+
+    <section class="kiosk-center">
+      <p class="start-prompt">TOCA LA PANTALLA PARA COMENZAR</p>
+      <button class="kiosk-button" id="start-btn">Comenzar</button>
+    </section>
+  </main>
+
+  <script>
+    const goDni = () => {
+      window.location.href = "{% url 'kiosk:dni' %}";
+    };
+
+    document.getElementById("start-btn").addEventListener("click", goDni);
+    document.getElementById("start-screen").addEventListener("touchstart", goDni, { passive: true });
+  </script>
+</body>
+</html>

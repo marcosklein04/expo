@@ -1,0 +1,85 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ingresar DNI</title>
+  <link rel="stylesheet" href="{% static 'style/style.css' %}">
+</head>
+<body class="page-dni">
+  <main class="kiosk-shell">
+    <div class="kiosk-brand">FENDT</div>
+    <h1 class="kiosk-title">DNI</h1>
+
+    <input id="dni" class="dni-input" type="text" inputmode="numeric" maxlength="12" autocomplete="off" readonly>
+
+    <section class="number-pad" id="pad"></section>
+
+    <section class="dni-actions">
+      <button class="kiosk-button secondary" id="clear">Borrar</button>
+      <button class="kiosk-button" id="continue">Continuar</button>
+    </section>
+  </main>
+
+  <script>
+    const idleMs = {{ idle_seconds }} * 1000;
+    let idleTimer;
+
+    const dniInput = document.getElementById("dni");
+    const pad = document.getElementById("pad");
+
+    const resetIdle = () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        window.location.href = "{% url 'kiosk:start' %}";
+      }, idleMs);
+    };
+
+    const addDigit = (digit) => {
+      if (dniInput.value.length >= 12) return;
+      dniInput.value += digit;
+    };
+
+    const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", ""];
+
+    keys.forEach((value) => {
+      if (!value) {
+        const gap = document.createElement("div");
+        gap.className = "number-gap";
+        pad.appendChild(gap);
+        return;
+      }
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "number-key";
+      button.textContent = value;
+      button.addEventListener("click", () => {
+        addDigit(value);
+        resetIdle();
+      });
+      pad.appendChild(button);
+    });
+
+    document.getElementById("clear").addEventListener("click", () => {
+      dniInput.value = "";
+      resetIdle();
+    });
+
+    document.getElementById("continue").addEventListener("click", () => {
+      const dni = dniInput.value.trim();
+      if (!dni) {
+        return;
+      }
+      window.location.href = `{% url 'kiosk:vouchers' %}?dni=${encodeURIComponent(dni)}`;
+    });
+
+    ["click", "touchstart", "keydown"].forEach((eventName) => {
+      document.addEventListener(eventName, resetIdle, { passive: true });
+    });
+
+    resetIdle();
+  </script>
+</body>
+</html>
