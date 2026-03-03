@@ -1,6 +1,14 @@
 from django.contrib import admin
 
-from core.models import CupoDiario, Persona, Ticket, VoucherTipo
+from core.models import (
+    CanjeOperacion,
+    CanjeOperacionItem,
+    CupoDiario,
+    Persona,
+    PoolDiario,
+    Ticket,
+    VoucherTipo,
+)
 
 
 @admin.register(Persona)
@@ -30,8 +38,31 @@ class TicketAdmin(admin.ModelAdmin):
         "dia",
         "persona",
         "voucher_tipo",
+        "operacion",
         "totem_id",
         "creado_en",
     )
     list_filter = ("dia", "voucher_tipo", "totem_id")
     search_fields = ("ticket_numero", "persona__dni", "persona__nombre_apellido")
+
+
+@admin.register(PoolDiario)
+class PoolDiarioAdmin(admin.ModelAdmin):
+    list_display = ("dia", "codigo", "stock_total", "usados", "actualizado_en")
+    list_filter = ("dia", "codigo")
+    search_fields = ("codigo",)
+
+
+class CanjeOperacionItemInline(admin.TabularInline):
+    model = CanjeOperacionItem
+    extra = 0
+    readonly_fields = ("comida_codigo", "canjear_propio", "cantidad_invitados")
+    can_delete = False
+
+
+@admin.register(CanjeOperacion)
+class CanjeOperacionAdmin(admin.ModelAdmin):
+    list_display = ("id", "dia", "persona", "totem_id", "creado_en")
+    list_filter = ("dia", "totem_id")
+    search_fields = ("persona__dni", "persona__nombre_apellido")
+    inlines = [CanjeOperacionItemInline]

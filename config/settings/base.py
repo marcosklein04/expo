@@ -35,6 +35,13 @@ def env_list(name: str, default: str = "") -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
+def env_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None or raw == "":
+        return default
+    return int(raw)
+
+
 DEFAULT_INSECURE_SECRET_KEY = "dev-only-insecure-secret-key"
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", DEFAULT_INSECURE_SECRET_KEY)
 DEBUG = env_bool("DJANGO_DEBUG", default=False)
@@ -126,6 +133,10 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 KIOSK_IDLE_SECONDS = int(os.getenv("KIOSK_IDLE_SECONDS", "45"))
 DEFAULT_TOTEM_ID = os.getenv("DEFAULT_TOTEM_ID", "TOTEM-01")
+POOL_STOCK_FIJOS_DESAYUNO = env_int("POOL_STOCK_FIJOS_DESAYUNO", 120)
+POOL_STOCK_FIJOS_ALMUERZO = env_int("POOL_STOCK_FIJOS_ALMUERZO", 120)
+POOL_STOCK_INVITADOS_DESAYUNO = env_int("POOL_STOCK_INVITADOS_DESAYUNO", 120)
+POOL_STOCK_INVITADOS_ALMUERZO = env_int("POOL_STOCK_INVITADOS_ALMUERZO", 120)
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
@@ -156,4 +167,3 @@ LOGGING = {
         },
     },
 }
-

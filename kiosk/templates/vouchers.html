@@ -9,59 +9,88 @@
 </head>
 <body class="page-vouchers">
   <main class="kiosk-shell" id="screen">
-    <div class="kiosk-brand">FENDT</div>
+    <div class="kiosk-brand" aria-label="Valtra Fendt">
+      <span class="brand-valtra">VALTRA</span>
+      <span class="brand-fendt">FENDT</span>
+    </div>
 
     {% if error %}
       <div class="error-box">{{ error }}</div>
       <section class="kiosk-center">
         <button class="kiosk-button secondary" onclick="window.location.href='{% url 'kiosk:dni' %}'">Volver</button>
       </section>
-    {% elif persona %}
+    {% elif persona and comidas %}
       <h1 class="welcome-title">Bienvenido</h1>
       <p class="welcome-name">{{ persona.nombre_apellido }}</p>
-      <p class="voucher-copy">Elegí uno o más vouchers</p>
+      <p class="voucher-copy">Elegí una o ambas comidas</p>
 
-      <section class="voucher-list voucher-list-qty">
-        {% for v in vouchers %}
+      <section class="meal-list">
+        {% for comida in comidas %}
           <article
-            class="voucher-row"
-            data-voucher-row
-            data-voucher="{{ v.codigo }}"
-            data-usados="{{ v.usados }}"
-            data-cupo="{{ v.cupo_por_dia }}"
+            class="meal-card"
+            data-meal-card
+            data-comida="{{ comida.codigo }}"
+            data-fixed-used="{{ comida.fijos.usados_persona }}"
+            data-fixed-quota="{{ comida.fijos.cupo_persona }}"
+            data-fixed-available="{{ comida.fijos.disponibles_persona }}"
+            data-fixed-stock-available="{{ comida.fijos.stock_disponible }}"
+            data-guest-used="{{ comida.invitados.usados_persona }}"
+            data-guest-quota="{{ comida.invitados.cupo_persona }}"
+            data-guest-available="{{ comida.invitados.disponibles_persona }}"
+            data-guest-stock-available="{{ comida.invitados.stock_disponible }}"
           >
-            <header class="voucher-row-head">
-              <span class="voucher-name">{{ v.codigo }}</span>
-              <span class="voucher-quota" data-role="quota">{{ v.usados }}/{{ v.cupo_por_dia }}</span>
-            </header>
-            <div class="voucher-stepper">
-              <button type="button" class="step-btn secondary" data-role="minus">-</button>
-              <span class="step-value" data-role="selected">0</span>
-              <button type="button" class="step-btn" data-role="plus" {% if v.agotado %}disabled{% endif %}>+</button>
+            <div class="meal-head">
+              <span class="meal-name">{{ comida.codigo }}</span>
+              <span class="meal-status" data-role="meal-status">Cargando...</span>
+            </div>
+
+            <div class="own-row">
+              <span class="own-label">CANJEAR MI VOUCHER</span>
+              <button type="button" class="own-toggle-btn" data-role="own-toggle">CANJEAR MI VOUCHER</button>
+            </div>
+            <p class="own-hint" data-role="own-hint">Voucher propio disponible</p>
+
+            <div class="guest-picker">
+              <div class="guest-picker-head">
+                <span class="guest-title">Sumar invitados</span>
+                <span class="guest-limit" data-role="guest-limit">{{ comida.invitados.usados_persona }}/{{ comida.invitados.cupo_persona }}</span>
+              </div>
+              <div class="voucher-stepper guest-stepper">
+                <button type="button" class="step-btn secondary" data-role="guest-minus">-</button>
+                <span class="step-value" data-role="guest-value">0</span>
+                <button type="button" class="step-btn" data-role="guest-plus">+</button>
+              </div>
+              <p class="guest-hint" data-role="guest-hint">Pool invitados: {{ comida.invitados.stock_disponible }} disponible(s)</p>
             </div>
           </article>
         {% endfor %}
       </section>
 
-      <p class="selection-info" id="selected-count">0 voucher(s) seleccionados</p>
+      <p class="selection-info" id="selected-count">0 propio(s) · 0 invitado(s) · 0 ticket(s)</p>
       <div class="notice" id="notice"></div>
 
       <section class="voucher-actions">
         <button class="kiosk-button" id="finalize-selection" disabled>Finalizar e imprimir</button>
-        <button class="kiosk-button secondary" id="clear-selection">Limpiar selección</button>
+        <button class="kiosk-button secondary" id="clear-selection" disabled>Limpiar selección</button>
         <button class="kiosk-button secondary" onclick="window.location.href='{% url 'kiosk:dni' %}'">Otro DNI</button>
+      </section>
+    {% else %}
+      <div class="error-box">No hay comidas habilitadas para mostrar.</div>
+      <section class="kiosk-center">
+        <button class="kiosk-button secondary" onclick="window.location.href='{% url 'kiosk:dni' %}'">Volver</button>
       </section>
     {% endif %}
 
     <section class="flow-screen hidden" id="flow-printing">
-      <div class="kiosk-brand">FENDT</div>
+      <div class="kiosk-brand" aria-label="Valtra Fendt">
+        <span class="brand-valtra">VALTRA</span>
+        <span class="brand-fendt">FENDT</span>
+      </div>
       <h2>Imprimiendo vouchers</h2>
       <p id="flow-printing-text">Retirá tus tickets del tótem.</p>
       <button class="kiosk-button" id="reprint-last">Reimprimir último</button>
     </section>
   </main>
-
-
 
   <script>
     const idleMs = {{ idle_seconds }} * 1000;
@@ -78,8 +107,9 @@
     const finalizeBtn = document.getElementById("finalize-selection");
     const clearBtn = document.getElementById("clear-selection");
 
-    const voucherRows = Array.from(document.querySelectorAll("[data-voucher-row]"));
-    const selectedByVoucher = new Map();
+    const mealCards = Array.from(document.querySelectorAll("[data-meal-card]"));
+    const ownByMeal = new Map();
+    const invitedByMeal = new Map();
 
     const resetIdle = () => {
       clearTimeout(idleTimer);
@@ -101,6 +131,208 @@
       return "";
     }
 
+    function toNumber(value) {
+      return Number(value || "0");
+    }
+
+    function cardCode(card) {
+      return card.dataset.comida;
+    }
+
+    function fixedUsed(card) {
+      return toNumber(card.dataset.fixedUsed);
+    }
+
+    function fixedQuota(card) {
+      return toNumber(card.dataset.fixedQuota);
+    }
+
+    function fixedAvailable(card) {
+      return Math.max(toNumber(card.dataset.fixedAvailable), 0);
+    }
+
+    function fixedStockAvailable(card) {
+      return Math.max(toNumber(card.dataset.fixedStockAvailable), 0);
+    }
+
+    function canRedeemOwn(card) {
+      return fixedAvailable(card) > 0 && fixedStockAvailable(card) > 0;
+    }
+
+    function guestUsed(card) {
+      return toNumber(card.dataset.guestUsed);
+    }
+
+    function guestQuota(card) {
+      return toNumber(card.dataset.guestQuota);
+    }
+
+    function guestAvailable(card) {
+      return Math.max(toNumber(card.dataset.guestAvailable), 0);
+    }
+
+    function guestStockAvailable(card) {
+      return Math.max(toNumber(card.dataset.guestStockAvailable), 0);
+    }
+
+    function guestMax(card) {
+      return Math.max(Math.min(guestAvailable(card), guestStockAvailable(card)), 0);
+    }
+
+    function ownSelected(card) {
+      return ownByMeal.get(cardCode(card)) || false;
+    }
+
+    function invitedSelected(card) {
+      return invitedByMeal.get(cardCode(card)) || 0;
+    }
+
+    function setOwnSelected(card, selected) {
+      const next = Boolean(selected) && canRedeemOwn(card);
+      ownByMeal.set(cardCode(card), next);
+      updateCardUI(card);
+      updateSelectionInfo();
+    }
+
+    function setInvitedSelected(card, nextValue) {
+      const capped = Math.max(0, Math.min(nextValue, guestMax(card)));
+      invitedByMeal.set(cardCode(card), capped);
+      const valueLabel = card.querySelector("[data-role='guest-value']");
+      if (valueLabel) {
+        valueLabel.textContent = String(capped);
+      }
+      updateCardUI(card);
+      updateSelectionInfo();
+    }
+
+    function updateCardUI(card) {
+      const ownToggle = card.querySelector("[data-role='own-toggle']");
+      const ownHint = card.querySelector("[data-role='own-hint']");
+      const mealStatus = card.querySelector("[data-role='meal-status']");
+      const minusBtn = card.querySelector("[data-role='guest-minus']");
+      const plusBtn = card.querySelector("[data-role='guest-plus']");
+      const guestLimit = card.querySelector("[data-role='guest-limit']");
+      const guestHint = card.querySelector("[data-role='guest-hint']");
+
+      const ownAvailable = canRedeemOwn(card);
+      const ownIsSelected = ownSelected(card);
+      const invited = invitedSelected(card);
+      const invitedMax = guestMax(card);
+
+      card.classList.toggle("selected", ownIsSelected || invited > 0);
+
+      if (mealStatus) {
+        if (fixedAvailable(card) <= 0) {
+          mealStatus.textContent = "Voucher propio no disponible";
+        } else if (fixedStockAvailable(card) <= 0) {
+          mealStatus.textContent = "Sin stock propio";
+        } else {
+          mealStatus.textContent = "Voucher propio disponible";
+        }
+      }
+
+      if (ownHint) {
+        if (fixedAvailable(card) <= 0) {
+          ownHint.textContent = "Voucher propio: ya utilizado";
+        } else if (fixedStockAvailable(card) <= 0) {
+          ownHint.textContent = "Voucher propio: sin stock";
+        } else {
+          ownHint.textContent = "Voucher propio: disponible";
+        }
+      }
+
+      if (ownToggle) {
+        ownToggle.classList.remove("is-selected", "is-blocked");
+        ownToggle.disabled = processing || !ownAvailable;
+
+        if (ownAvailable) {
+          if (ownIsSelected) {
+            ownToggle.textContent = "SELECCIONADO";
+            ownToggle.classList.add("is-selected");
+          } else {
+            ownToggle.textContent = "CANJEAR MI VOUCHER";
+          }
+        } else {
+          ownToggle.classList.add("is-blocked");
+          ownToggle.textContent = fixedAvailable(card) <= 0 ? "YA UTILIZADO" : "SIN STOCK";
+        }
+      }
+
+      if (guestLimit) {
+        guestLimit.textContent = `${guestUsed(card)}/${guestQuota(card)}`;
+      }
+
+      if (guestHint) {
+        guestHint.textContent = `Pool invitados: ${guestStockAvailable(card)} disponible(s)`;
+      }
+
+      if (minusBtn) {
+        minusBtn.disabled = processing || invited <= 0;
+      }
+
+      if (plusBtn) {
+        plusBtn.disabled = processing || invited >= invitedMax;
+      }
+    }
+
+    function totals() {
+      let propios = 0;
+      let invitados = 0;
+
+      mealCards.forEach((card) => {
+        if (ownSelected(card)) {
+          propios += 1;
+        }
+        invitados += invitedSelected(card);
+      });
+
+      return {
+        propios,
+        invitados,
+        tickets: propios + invitados,
+      };
+    }
+
+    function buildBatchItems() {
+      const items = [];
+      mealCards.forEach((card) => {
+        const canjearPropio = ownSelected(card);
+        const invitados = invitedSelected(card);
+        if (!canjearPropio && invitados === 0) {
+          return;
+        }
+
+        items.push({
+          comida: cardCode(card),
+          canjear_propio: canjearPropio,
+          invitados,
+        });
+      });
+      return items;
+    }
+
+    function updateSelectionInfo() {
+      const { propios, invitados, tickets } = totals();
+      if (selectedCount) {
+        selectedCount.textContent = `${propios} propio(s) · ${invitados} invitado(s) · ${tickets} ticket(s)`;
+      }
+      if (finalizeBtn) {
+        finalizeBtn.disabled = processing || tickets === 0;
+      }
+      if (clearBtn) {
+        clearBtn.disabled = processing || tickets === 0;
+      }
+    }
+
+    function clearSelection() {
+      mealCards.forEach((card) => {
+        setOwnSelected(card, false);
+        setInvitedSelected(card, 0);
+      });
+      notice.textContent = "";
+      updateSelectionInfo();
+    }
+
     function openPrintWindow(url) {
       if (!url) return;
       lastPrintUrl = url;
@@ -115,86 +347,6 @@
       }
       flowPrintingText.textContent = message;
       flowPrinting.classList.remove("hidden");
-    }
-
-    function rowUsados(row) {
-      return Number(row.dataset.usados || "0");
-    }
-
-    function rowCupo(row) {
-      return Number(row.dataset.cupo || "0");
-    }
-
-    function rowDisponibles(row) {
-      return Math.max(rowCupo(row) - rowUsados(row), 0);
-    }
-
-    function rowSelected(row) {
-      return selectedByVoucher.get(row.dataset.voucher) || 0;
-    }
-
-    function setRowSelected(row, nextValue) {
-      const clamped = Math.max(0, Math.min(nextValue, rowDisponibles(row)));
-      selectedByVoucher.set(row.dataset.voucher, clamped);
-      const selectedLabel = row.querySelector("[data-role='selected']");
-      if (selectedLabel) {
-        selectedLabel.textContent = String(clamped);
-      }
-      row.classList.toggle("selected", clamped > 0);
-      updateRowControls(row);
-      updateSelectionInfo();
-    }
-
-    function updateRowControls(row) {
-      const minusBtn = row.querySelector("[data-role='minus']");
-      const plusBtn = row.querySelector("[data-role='plus']");
-      const cuota = row.querySelector("[data-role='quota']");
-      const selected = rowSelected(row);
-      const disponibles = rowDisponibles(row);
-      if (cuota) {
-        cuota.textContent = `${rowUsados(row)}/${rowCupo(row)}`;
-      }
-      if (minusBtn) minusBtn.disabled = processing || selected <= 0;
-      if (plusBtn) plusBtn.disabled = processing || disponibles <= selected;
-    }
-
-    function totalSelected() {
-      let total = 0;
-      voucherRows.forEach((row) => {
-        total += rowSelected(row);
-      });
-      return total;
-    }
-
-    function buildBatchItems() {
-      const items = [];
-      voucherRows.forEach((row) => {
-        const cantidad = rowSelected(row);
-        if (cantidad > 0) {
-          items.push({ voucher: row.dataset.voucher, cantidad });
-        }
-      });
-      return items;
-    }
-
-    function updateSelectionInfo() {
-      const total = totalSelected();
-      if (selectedCount) {
-        selectedCount.textContent = `${total} voucher(s) seleccionados`;
-      }
-      if (finalizeBtn) {
-        finalizeBtn.disabled = processing || total === 0;
-      }
-      if (clearBtn) {
-        clearBtn.disabled = processing || total === 0;
-      }
-    }
-
-    function clearSelection() {
-      voucherRows.forEach((row) => {
-        setRowSelected(row, 0);
-      });
-      notice.textContent = "";
     }
 
     async function redeemBatch(items) {
@@ -228,37 +380,49 @@
       showFlow("");
     }
 
+    function applySuccess(items) {
+      items.forEach((item) => {
+        const card = mealCards.find((row) => cardCode(row) === item.comida);
+        if (!card) return;
+
+        if (item.canjear_propio) {
+          card.dataset.fixedUsed = String(fixedUsed(card) + 1);
+          card.dataset.fixedAvailable = String(Math.max(fixedAvailable(card) - 1, 0));
+          card.dataset.fixedStockAvailable = String(Math.max(fixedStockAvailable(card) - 1, 0));
+        }
+
+        if (item.invitados > 0) {
+          card.dataset.guestUsed = String(guestUsed(card) + item.invitados);
+          card.dataset.guestAvailable = String(Math.max(guestAvailable(card) - item.invitados, 0));
+          card.dataset.guestStockAvailable = String(
+            Math.max(guestStockAvailable(card) - item.invitados, 0)
+          );
+        }
+
+        setOwnSelected(card, false);
+        setInvitedSelected(card, 0);
+      });
+    }
+
     async function finalizeSelection() {
       if (processing) return;
+
       const items = buildBatchItems();
       if (items.length === 0) {
-        notice.textContent = "Seleccioná al menos un voucher.";
+        notice.textContent = "Seleccioná al menos una opción para canjear.";
         return;
       }
 
       processing = true;
       notice.textContent = "Procesando selección...";
-      voucherRows.forEach((row) => updateRowControls(row));
+      mealCards.forEach((card) => updateCardUI(card));
       updateSelectionInfo();
 
       try {
         const data = await redeemBatch(items);
         await printTickets(data.tickets || []);
 
-        const usedByVoucher = {};
-        items.forEach((item) => {
-          usedByVoucher[item.voucher] = item.cantidad;
-        });
-
-        voucherRows.forEach((row) => {
-          const codigo = row.dataset.voucher;
-          const plus = Number(usedByVoucher[codigo] || 0);
-          if (plus > 0) {
-            row.dataset.usados = String(rowUsados(row) + plus);
-          }
-          setRowSelected(row, 0);
-          updateRowControls(row);
-        });
+        applySuccess(items);
 
         const total = Number(data.total_tickets || 0);
         notice.textContent = `${total} ticket(s) generado(s). Finalizando...`;
@@ -269,7 +433,7 @@
         notice.textContent = error.message || "No se pudo emitir la selección.";
       } finally {
         processing = false;
-        voucherRows.forEach((row) => updateRowControls(row));
+        mealCards.forEach((card) => updateCardUI(card));
         updateSelectionInfo();
       }
     }
@@ -290,24 +454,33 @@
       finalizeBtn.addEventListener("click", finalizeSelection);
     }
 
-    voucherRows.forEach((row) => {
-      selectedByVoucher.set(row.dataset.voucher, 0);
-      const minusBtn = row.querySelector("[data-role='minus']");
-      const plusBtn = row.querySelector("[data-role='plus']");
+    mealCards.forEach((card) => {
+      ownByMeal.set(cardCode(card), false);
+      invitedByMeal.set(cardCode(card), 0);
+
+      const ownToggle = card.querySelector("[data-role='own-toggle']");
+      const minusBtn = card.querySelector("[data-role='guest-minus']");
+      const plusBtn = card.querySelector("[data-role='guest-plus']");
+
+      if (ownToggle) {
+        ownToggle.addEventListener("click", () => {
+          setOwnSelected(card, !ownSelected(card));
+        });
+      }
 
       if (minusBtn) {
         minusBtn.addEventListener("click", () => {
-          setRowSelected(row, rowSelected(row) - 1);
+          setInvitedSelected(card, invitedSelected(card) - 1);
         });
       }
 
       if (plusBtn) {
         plusBtn.addEventListener("click", () => {
-          setRowSelected(row, rowSelected(row) + 1);
+          setInvitedSelected(card, invitedSelected(card) + 1);
         });
       }
 
-      updateRowControls(row);
+      updateCardUI(card);
     });
 
     updateSelectionInfo();
@@ -315,4 +488,3 @@
   </script>
 </body>
 </html>
-

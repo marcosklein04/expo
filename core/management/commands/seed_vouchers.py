@@ -4,13 +4,15 @@ from core.models import VoucherTipo
 
 
 class Command(BaseCommand):
-    help = "Crea/actualiza los 3 vouchers fijos con cupos diarios."
+    help = "Crea/actualiza vouchers y cupos diarios por persona."
 
     def handle(self, *args, **options):
         defaults = [
             (VoucherTipo.DESAYUNO, 1),
             (VoucherTipo.ALMUERZO, 1),
             (VoucherTipo.INVITADO, 5),
+            (VoucherTipo.INVITADO_DESAYUNO, 5),
+            (VoucherTipo.INVITADO_ALMUERZO, 5),
         ]
 
         for codigo, cupo in defaults:

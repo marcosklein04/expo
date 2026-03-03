@@ -37,6 +37,7 @@ def vouchers_screen(request):
         "totem_id": settings.DEFAULT_TOTEM_ID,
         "error": None,
         "persona": None,
+        "comidas": [],
         "vouchers": [],
         "dia": None,
     }

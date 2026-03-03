@@ -1,13 +1,13 @@
 # Expo Kiosk Vouchers (Django + MySQL)
 
-Aplicacion de kiosco para emision de vouchers con control diario por persona/voucher, soporte para multiples totems y tickets termicos.
+Aplicacion de kiosco para emision de vouchers con control diario por persona/voucher, pools diarios de stock por comida y soporte para multiples totems con ticket termico.
 
 ## Flujo funcional
 
 1. Pantalla inicial (`/`)
 2. Ingreso DNI (`/kiosk/dni/`)
 3. Consulta de cupos del dia
-4. Canje de voucher
+4. Canje de una o ambas comidas (desayuno/almuerzo) con invitados por comida
 5. Emision e impresion del ticket (`/tickets/<ticket_numero>/`)
 
 ## API
@@ -16,6 +16,8 @@ Aplicacion de kiosco para emision de vouchers con control diario por persona/vou
 - `POST /api/redeem`
 - `POST /api/redeem-batch`
 - `GET /api/reports/daily?dia=YYYY-MM-DD`
+- `GET /api/reports/redeems?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&dni=&totem_id=&limit=500`
+- `GET /api/reports/redeems.csv?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&dni=&totem_id=&limit=2000`
 - `GET /api/healthz`
 - `GET /healthz`
 
@@ -28,12 +30,19 @@ Ejemplo `redeem-batch` (desde frontend):
   "dni": "30111222",
   "totem_id": "TOTEM-01",
   "items": [
-    {"voucher": "DESAYUNO", "cantidad": 1},
-    {"voucher": "ALMUERZO", "cantidad": 1},
-    {"voucher": "INVITADO", "cantidad": 2}
+    {"comida": "DESAYUNO", "invitados": 2},
+    {"comida": "ALMUERZO", "invitados": 1}
   ]
 }
 ```
+
+Reglas principales:
+
+- `DESAYUNO` y `ALMUERZO`: maximo 1 fijo por persona por dia.
+- `INVITADO_DESAYUNO` y `INVITADO_ALMUERZO`: maximo 5 por persona por comida y por dia.
+- Pools diarios configurables por entorno (`POOL_STOCK_*`) para cortar stock global.
+- Cada click en `Finalizar e imprimir` se guarda como `CanjeOperacion` con items por comida.
+- Cada ticket queda asociado a su operacion de canje para trazabilidad completa.
 
 Ejemplo `reportes`:
 
@@ -73,6 +82,10 @@ export MYSQL_USER=expo_kiosk_user
 export MYSQL_PASSWORD=CHANGE_ME_STRONG_PASSWORD
 export MYSQL_HOST=127.0.0.1
 export MYSQL_PORT=3306
+export POOL_STOCK_FIJOS_DESAYUNO=120
+export POOL_STOCK_FIJOS_ALMUERZO=120
+export POOL_STOCK_INVITADOS_DESAYUNO=120
+export POOL_STOCK_INVITADOS_ALMUERZO=120
 ```
 
 Aplicar esquema y datos base:
