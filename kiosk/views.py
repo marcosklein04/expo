@@ -1,9 +1,10 @@
 from django.conf import settings
 from django.shortcuts import redirect, render
-
+from django.views.decorators.csrf import ensure_csrf_cookie
 from core.services import DomainError, lookup_persona_cupos
 
 
+@ensure_csrf_cookie
 def start_screen(request):
     return render(
         request,
@@ -14,6 +15,7 @@ def start_screen(request):
     )
 
 
+@ensure_csrf_cookie
 def dni_screen(request):
     return render(
         request,
@@ -24,6 +26,7 @@ def dni_screen(request):
     )
 
 
+@ensure_csrf_cookie
 def vouchers_screen(request):
     dni = request.GET.get("dni", "")
     if not dni:

@@ -19,29 +19,36 @@
     {% elif persona %}
       <h1 class="welcome-title">Bienvenido</h1>
       <p class="welcome-name">{{ persona.nombre_apellido }}</p>
-      <p class="voucher-copy">Elegí 1, 2 o 3 vouchers</p>
+      <p class="voucher-copy">Elegí uno o más vouchers</p>
 
-      <section class="voucher-list">
+      <section class="voucher-list voucher-list-qty">
         {% for v in vouchers %}
-          <button
-            class="kiosk-button voucher-btn"
+          <article
+            class="voucher-row"
+            data-voucher-row
             data-voucher="{{ v.codigo }}"
             data-usados="{{ v.usados }}"
             data-cupo="{{ v.cupo_por_dia }}"
-            {% if v.agotado %}disabled{% endif %}
           >
-            <span>{{ v.codigo }}</span>
-            <span class="voucher-quota" data-role="quota">{{ v.usados }}/{{ v.cupo_por_dia }}</span>
-          </button>
+            <header class="voucher-row-head">
+              <span class="voucher-name">{{ v.codigo }}</span>
+              <span class="voucher-quota" data-role="quota">{{ v.usados }}/{{ v.cupo_por_dia }}</span>
+            </header>
+            <div class="voucher-stepper">
+              <button type="button" class="step-btn secondary" data-role="minus">-</button>
+              <span class="step-value" data-role="selected">0</span>
+              <button type="button" class="step-btn" data-role="plus" {% if v.agotado %}disabled{% endif %}>+</button>
+            </div>
+          </article>
         {% endfor %}
       </section>
 
-      <p class="selection-info" id="selected-count">0 seleccionados</p>
+      <p class="selection-info" id="selected-count">0 voucher(s) seleccionados</p>
       <div class="notice" id="notice"></div>
 
       <section class="voucher-actions">
-        <button class="kiosk-button" id="confirm-selection" disabled>Imprimir selección</button>
-        <button class="kiosk-button secondary" id="finalize-selection">Finalizar e imprimir</button>
+        <button class="kiosk-button" id="finalize-selection" disabled>Finalizar e imprimir</button>
+        <button class="kiosk-button secondary" id="clear-selection">Limpiar selección</button>
         <button class="kiosk-button secondary" onclick="window.location.href='{% url 'kiosk:dni' %}'">Otro DNI</button>
       </section>
     {% endif %}
@@ -50,18 +57,29 @@
       <div class="kiosk-brand">FENDT</div>
       <h2>Imprimiendo vouchers</h2>
       <p id="flow-printing-text">Retirá tus tickets del tótem.</p>
-      <button class="kiosk-button" id="print-now">Imprimir último</button>
+      <button class="kiosk-button" id="reprint-last">Reimprimir último</button>
     </section>
   </main>
+
+
 
   <script>
     const idleMs = {{ idle_seconds }} * 1000;
     const startUrl = "{% url 'kiosk:start' %}";
     let idleTimer;
-    let pendingPrintUrl = null;
     let processing = false;
+    let lastPrintUrl = null;
 
-    const selectedVouchers = new Set();
+    const notice = document.getElementById("notice");
+    const selectedCount = document.getElementById("selected-count");
+    const flowPrinting = document.getElementById("flow-printing");
+    const flowPrintingText = document.getElementById("flow-printing-text");
+    const reprintLastBtn = document.getElementById("reprint-last");
+    const finalizeBtn = document.getElementById("finalize-selection");
+    const clearBtn = document.getElementById("clear-selection");
+
+    const voucherRows = Array.from(document.querySelectorAll("[data-voucher-row]"));
+    const selectedByVoucher = new Map();
 
     const resetIdle = () => {
       clearTimeout(idleTimer);
@@ -74,198 +92,222 @@
       document.addEventListener(eventName, resetIdle, { passive: true });
     });
 
-    const notice = document.getElementById("notice");
-    const selectedCount = document.getElementById("selected-count");
-    const buttons = document.querySelectorAll(".voucher-btn[data-voucher]");
-    const flowPrinting = document.getElementById("flow-printing");
-    const flowPrintingText = document.getElementById("flow-printing-text");
-    const printNowBtn = document.getElementById("print-now");
-    const confirmBtn = document.getElementById("confirm-selection");
-    const finalizeBtn = document.getElementById("finalize-selection");
-
-    function openPrintWindow() {
-      if (!pendingPrintUrl) return;
-      window.open(pendingPrintUrl, "ticket", "width=380,height=640");
+    function getCookie(name) {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) {
+        return parts.pop().split(";").shift();
+      }
+      return "";
     }
 
-    function showFlow(target, message = "Retirá tus tickets del tótem.") {
-      flowPrinting.classList.add("hidden");
-      if (target === "printing") {
-        flowPrintingText.textContent = message;
-        flowPrinting.classList.remove("hidden");
+    function openPrintWindow(url) {
+      if (!url) return;
+      lastPrintUrl = url;
+      window.open(url, `ticket-${Date.now()}`, "width=420,height=720");
+    }
+
+    function showFlow(message = "") {
+      if (!flowPrinting) return;
+      if (!message) {
+        flowPrinting.classList.add("hidden");
+        return;
       }
+      flowPrintingText.textContent = message;
+      flowPrinting.classList.remove("hidden");
+    }
+
+    function rowUsados(row) {
+      return Number(row.dataset.usados || "0");
+    }
+
+    function rowCupo(row) {
+      return Number(row.dataset.cupo || "0");
+    }
+
+    function rowDisponibles(row) {
+      return Math.max(rowCupo(row) - rowUsados(row), 0);
+    }
+
+    function rowSelected(row) {
+      return selectedByVoucher.get(row.dataset.voucher) || 0;
+    }
+
+    function setRowSelected(row, nextValue) {
+      const clamped = Math.max(0, Math.min(nextValue, rowDisponibles(row)));
+      selectedByVoucher.set(row.dataset.voucher, clamped);
+      const selectedLabel = row.querySelector("[data-role='selected']");
+      if (selectedLabel) {
+        selectedLabel.textContent = String(clamped);
+      }
+      row.classList.toggle("selected", clamped > 0);
+      updateRowControls(row);
+      updateSelectionInfo();
+    }
+
+    function updateRowControls(row) {
+      const minusBtn = row.querySelector("[data-role='minus']");
+      const plusBtn = row.querySelector("[data-role='plus']");
+      const cuota = row.querySelector("[data-role='quota']");
+      const selected = rowSelected(row);
+      const disponibles = rowDisponibles(row);
+      if (cuota) {
+        cuota.textContent = `${rowUsados(row)}/${rowCupo(row)}`;
+      }
+      if (minusBtn) minusBtn.disabled = processing || selected <= 0;
+      if (plusBtn) plusBtn.disabled = processing || disponibles <= selected;
+    }
+
+    function totalSelected() {
+      let total = 0;
+      voucherRows.forEach((row) => {
+        total += rowSelected(row);
+      });
+      return total;
+    }
+
+    function buildBatchItems() {
+      const items = [];
+      voucherRows.forEach((row) => {
+        const cantidad = rowSelected(row);
+        if (cantidad > 0) {
+          items.push({ voucher: row.dataset.voucher, cantidad });
+        }
+      });
+      return items;
     }
 
     function updateSelectionInfo() {
+      const total = totalSelected();
       if (selectedCount) {
-        const count = selectedVouchers.size;
-        selectedCount.textContent = `${count} seleccionado${count === 1 ? "" : "s"}`;
-      }
-      if (confirmBtn) {
-        confirmBtn.disabled = processing || selectedVouchers.size === 0;
+        selectedCount.textContent = `${total} voucher(s) seleccionados`;
       }
       if (finalizeBtn) {
-        finalizeBtn.disabled = processing;
+        finalizeBtn.disabled = processing || total === 0;
+      }
+      if (clearBtn) {
+        clearBtn.disabled = processing || total === 0;
       }
     }
 
-    function updateVoucherButton(button) {
-      const usados = Number(button.dataset.usados || "0");
-      const cupo = Number(button.dataset.cupo || "0");
-      const quota = button.querySelector("[data-role='quota']");
-
-      if (quota) {
-        quota.textContent = `${usados}/${cupo}`;
-      }
-
-      const agotado = usados >= cupo;
-      button.disabled = processing || agotado;
-      if (agotado) {
-        selectedVouchers.delete(button.dataset.voucher);
-        button.classList.remove("selected");
-      }
-    }
-
-    function setVoucherButtonsEnabled(enabled) {
-      buttons.forEach((button) => {
-        const usados = Number(button.dataset.usados || "0");
-        const cupo = Number(button.dataset.cupo || "0");
-        const agotado = usados >= cupo;
-        button.disabled = !enabled || agotado;
+    function clearSelection() {
+      voucherRows.forEach((row) => {
+        setRowSelected(row, 0);
       });
+      notice.textContent = "";
     }
 
-    function allQuotasExhausted() {
-      return Array.from(buttons).every((button) => {
-        const usados = Number(button.dataset.usados || "0");
-        const cupo = Number(button.dataset.cupo || "0");
-        return usados >= cupo;
-      });
-    }
-
-    async function redeemOne(voucherCode) {
-      const response = await fetch("{% url 'api:redeem' %}", {
+    async function redeemBatch(items) {
+      const response = await fetch("{% url 'api:redeem_batch' %}", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": getCookie("csrftoken"),
+        },
         body: JSON.stringify({
           dni: "{{ persona.dni|default:'' }}",
-          voucher: voucherCode,
           totem_id: "{{ totem_id }}",
+          items,
         }),
       });
-
       const data = await response.json();
       if (!response.ok || !data.ok) {
-        throw new Error(data?.error?.message || "No se pudo emitir el voucher.");
+        throw new Error(data?.error?.message || "No se pudo emitir la selección.");
       }
       return data;
     }
 
-    async function processSelection(options = {}) {
-      const goToStart = options.goToStart || false;
+    async function printTickets(tickets) {
+      for (let index = 0; index < tickets.length; index += 1) {
+        const ticket = tickets[index];
+        showFlow(`Imprimiendo ${index + 1} de ${tickets.length}...`);
+        openPrintWindow(ticket.print_url);
+        await new Promise((resolve) => setTimeout(resolve, 280));
+      }
+      showFlow("");
+    }
+
+    async function finalizeSelection() {
       if (processing) return;
-      if (selectedVouchers.size === 0) {
-        if (goToStart) {
-          window.location.href = startUrl;
-        } else {
-          notice.textContent = "Seleccioná al menos un voucher.";
-        }
+      const items = buildBatchItems();
+      if (items.length === 0) {
+        notice.textContent = "Seleccioná al menos un voucher.";
         return;
       }
 
       processing = true;
-      setVoucherButtonsEnabled(false);
-      updateSelectionInfo();
       notice.textContent = "Procesando selección...";
-
-      const selectedButtons = Array.from(buttons).filter((button) =>
-        selectedVouchers.has(button.dataset.voucher)
-      );
-
-      const total = selectedButtons.length;
-      let ok = 0;
-      const errors = [];
-
-      for (let index = 0; index < selectedButtons.length; index += 1) {
-        const button = selectedButtons[index];
-        const voucherCode = button.dataset.voucher;
-
-        showFlow("printing", `Imprimiendo ${index + 1} de ${total}...`);
-
-        try {
-          const data = await redeemOne(voucherCode);
-          pendingPrintUrl = data.ticket.print_url;
-          openPrintWindow();
-
-          button.dataset.usados = String(Number(button.dataset.usados || "0") + 1);
-          button.classList.remove("selected");
-          selectedVouchers.delete(voucherCode);
-          updateVoucherButton(button);
-          ok += 1;
-        } catch (error) {
-          button.classList.remove("selected");
-          selectedVouchers.delete(voucherCode);
-          errors.push(`${voucherCode}: ${error.message}`);
-        }
-
-        await new Promise((resolve) => setTimeout(resolve, 220));
-      }
-
-      showFlow();
-      processing = false;
-      setVoucherButtonsEnabled(true);
-      buttons.forEach((button) => updateVoucherButton(button));
+      voucherRows.forEach((row) => updateRowControls(row));
       updateSelectionInfo();
 
-      if (errors.length === 0) {
-        if (allQuotasExhausted()) {
-          notice.textContent = "Cupos agotados para hoy.";
-        } else {
-          notice.textContent = `${ok} ticket(s) generado(s). Podés volver a seleccionar.`;
-        }
-      } else {
-        notice.textContent = `Generados: ${ok}. Errores: ${errors.join(" | ")}`;
-      }
+      try {
+        const data = await redeemBatch(items);
+        await printTickets(data.tickets || []);
 
-      if (goToStart) {
-        notice.textContent = `${notice.textContent} Finalizando...`;
+        const usedByVoucher = {};
+        items.forEach((item) => {
+          usedByVoucher[item.voucher] = item.cantidad;
+        });
+
+        voucherRows.forEach((row) => {
+          const codigo = row.dataset.voucher;
+          const plus = Number(usedByVoucher[codigo] || 0);
+          if (plus > 0) {
+            row.dataset.usados = String(rowUsados(row) + plus);
+          }
+          setRowSelected(row, 0);
+          updateRowControls(row);
+        });
+
+        const total = Number(data.total_tickets || 0);
+        notice.textContent = `${total} ticket(s) generado(s). Finalizando...`;
         window.setTimeout(() => {
           window.location.href = startUrl;
-        }, 1300);
+        }, 1200);
+      } catch (error) {
+        notice.textContent = error.message || "No se pudo emitir la selección.";
+      } finally {
+        processing = false;
+        voucherRows.forEach((row) => updateRowControls(row));
+        updateSelectionInfo();
       }
     }
 
-    if (printNowBtn) {
-      printNowBtn.addEventListener("click", () => {
-        openPrintWindow();
-        showFlow();
+    if (reprintLastBtn) {
+      reprintLastBtn.addEventListener("click", () => {
+        if (lastPrintUrl) {
+          openPrintWindow(lastPrintUrl);
+        }
       });
     }
 
-    if (confirmBtn) {
-      confirmBtn.addEventListener("click", processSelection);
+    if (clearBtn) {
+      clearBtn.addEventListener("click", clearSelection);
     }
 
     if (finalizeBtn) {
-      finalizeBtn.addEventListener("click", () => processSelection({ goToStart: true }));
+      finalizeBtn.addEventListener("click", finalizeSelection);
     }
 
-    buttons.forEach((button) => {
-      updateVoucherButton(button);
-      button.addEventListener("click", () => {
-        if (button.disabled || processing) return;
+    voucherRows.forEach((row) => {
+      selectedByVoucher.set(row.dataset.voucher, 0);
+      const minusBtn = row.querySelector("[data-role='minus']");
+      const plusBtn = row.querySelector("[data-role='plus']");
 
-        const code = button.dataset.voucher;
-        if (selectedVouchers.has(code)) {
-          selectedVouchers.delete(code);
-          button.classList.remove("selected");
-        } else {
-          selectedVouchers.add(code);
-          button.classList.add("selected");
-        }
+      if (minusBtn) {
+        minusBtn.addEventListener("click", () => {
+          setRowSelected(row, rowSelected(row) - 1);
+        });
+      }
 
-        updateSelectionInfo();
-      });
+      if (plusBtn) {
+        plusBtn.addEventListener("click", () => {
+          setRowSelected(row, rowSelected(row) + 1);
+        });
+      }
+
+      updateRowControls(row);
     });
 
     updateSelectionInfo();
@@ -273,3 +315,4 @@
   </script>
 </body>
 </html>
+
