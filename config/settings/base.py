@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 
 def load_dotenv(path: Path) -> None:
@@ -35,10 +35,11 @@ def env_list(name: str, default: str = "") -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-only-insecure-secret-key")
-DEBUG = env_bool("DJANGO_DEBUG", default=True)
+DEFAULT_INSECURE_SECRET_KEY = "dev-only-insecure-secret-key"
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", DEFAULT_INSECURE_SECRET_KEY)
+DEBUG = env_bool("DJANGO_DEBUG", default=False)
 
-ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", default="*")
+ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", default="127.0.0.1,localhost")
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
 
 INSTALLED_APPS = [
@@ -74,6 +75,7 @@ TEMPLATES = [
         "OPTIONS": {
             "context_processors": [
                 "django.template.context_processors.request",
+                "django.template.context_processors.csrf",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
             ],
@@ -90,9 +92,9 @@ if DB_ENGINE == "mysql":
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.mysql",
-            "NAME": os.getenv("MYSQL_DATABASE", "expo"),
-            "USER": os.getenv("MYSQL_USER", "expo"),
-            "PASSWORD": os.getenv("MYSQL_PASSWORD", "expo"),
+            "NAME": os.getenv("MYSQL_DATABASE", "expo_kiosk"),
+            "USER": os.getenv("MYSQL_USER", "expo_kiosk_user"),
+            "PASSWORD": os.getenv("MYSQL_PASSWORD", "CHANGE_ME_STRONG_PASSWORD"),
             "HOST": os.getenv("MYSQL_HOST", "127.0.0.1"),
             "PORT": os.getenv("MYSQL_PORT", "3306"),
             "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60")),
@@ -122,13 +124,36 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Runtime config for kiosk behavior.
 KIOSK_IDLE_SECONDS = int(os.getenv("KIOSK_IDLE_SECONDS", "45"))
 DEFAULT_TOTEM_ID = os.getenv("DEFAULT_TOTEM_ID", "TOTEM-01")
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-SESSION_COOKIE_SECURE = env_bool("SESSION_COOKIE_SECURE", default=not DEBUG)
-CSRF_COOKIE_SECURE = env_bool("CSRF_COOKIE_SECURE", default=not DEBUG)
-SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "0" if DEBUG else "31536000"))
-SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", default=not DEBUG)
-SECURE_HSTS_PRELOAD = env_bool("SECURE_HSTS_PRELOAD", default=False)
+
+LOG_LEVEL = os.getenv("DJANGO_LOG_LEVEL", "INFO").upper()
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "structured": {
+            "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "structured",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": LOG_LEVEL,
+    },
+    "loggers": {
+        "kiosk.audit": {
+            "handlers": ["console"],
+            "level": LOG_LEVEL,
+            "propagate": False,
+        },
+    },
+}
+

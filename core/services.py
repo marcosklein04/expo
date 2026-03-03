@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
 from uuid import uuid4
 
 from django.db import IntegrityError, transaction
+from django.db.models import Count
 from django.utils import timezone
 
 from core.models import CupoDiario, Persona, Ticket, VoucherTipo
+
+audit_logger = logging.getLogger("kiosk.audit")
 
 
 class DomainError(Exception):
@@ -28,6 +32,11 @@ class PersonaNoEncontradaError(DomainError):
 
 class VoucherInvalidoError(DomainError):
     code = "invalid_voucher"
+    http_status = 400
+
+
+class CantidadInvalidaError(DomainError):
+    code = "invalid_quantity"
     http_status = 400
 
 
@@ -171,6 +180,85 @@ def _build_ticket_number(*, dia: date, voucher_codigo: str, totem_id: str) -> st
     return f"{dia:%Y%m%d}-{voucher_short}-{totem_short}-{random_suffix}"
 
 
+def _create_ticket_with_retries(
+    *, persona: Persona, voucher_tipo: VoucherTipo, dia: date, totem_id: str
+) -> Ticket:
+    ticket: Ticket | None = None
+    for _ in range(3):
+        try:
+            ticket = Ticket.objects.create(
+                persona=persona,
+                voucher_tipo=voucher_tipo,
+                dia=dia,
+                totem_id=totem_id,
+                ticket_numero=_build_ticket_number(
+                    dia=dia,
+                    voucher_codigo=voucher_tipo.codigo,
+                    totem_id=totem_id,
+                ),
+            )
+            break
+        except IntegrityError:
+            continue
+
+    if ticket is None:
+        raise DomainError("No se pudo generar un ticket unico. Reintente.")
+
+    audit_logger.info(
+        "ticket_created ticket=%s dni=%s voucher=%s dia=%s totem=%s",
+        ticket.ticket_numero,
+        persona.dni,
+        voucher_tipo.codigo,
+        dia.isoformat(),
+        totem_id,
+    )
+    return ticket
+
+
+def _redeem_locked(
+    *,
+    persona: Persona,
+    voucher_tipo: VoucherTipo,
+    totem_id: str,
+    dia: date,
+    cantidad: int,
+) -> list[Ticket]:
+    if cantidad < 1:
+        raise CantidadInvalidaError("La cantidad debe ser mayor o igual a 1.")
+
+    cupo = _get_or_create_cupo_diario_lock(
+        persona=persona,
+        voucher_tipo=voucher_tipo,
+        dia=dia,
+    )
+
+    disponibles = voucher_tipo.cupo_por_dia - cupo.usados
+    if disponibles < cantidad:
+        raise CupoAgotadoError(
+            f"Cupo diario agotado para {voucher_tipo.codigo}.",
+            details={
+                "codigo": voucher_tipo.codigo,
+                "cupo_por_dia": voucher_tipo.cupo_por_dia,
+                "usados": cupo.usados,
+                "disponibles": max(disponibles, 0),
+                "solicitados": cantidad,
+            },
+        )
+
+    cupo.usados += cantidad
+    cupo.save(update_fields=["usados", "actualizado_en"])
+
+    return [
+        _create_ticket_with_retries(
+            persona=persona,
+            voucher_tipo=voucher_tipo,
+            dia=dia,
+            totem_id=totem_id,
+        )
+        for _ in range(cantidad)
+    ]
+
+
 def redeem_voucher(
     *,
     dni: str,
@@ -183,48 +271,141 @@ def redeem_voucher(
         raise PersonaNoEncontradaError("Debe ingresar un DNI valido.")
 
     dia = dia or _hoy()
+    voucher_codigo = voucher_codigo.upper().strip()
 
     with transaction.atomic():
         persona = _get_persona(normalized_dni, lock=True)
         voucher_tipo = _get_voucher_tipo(voucher_codigo)
-        cupo = _get_or_create_cupo_diario_lock(
+        tickets = _redeem_locked(
             persona=persona,
             voucher_tipo=voucher_tipo,
+            totem_id=totem_id,
             dia=dia,
+            cantidad=1,
         )
 
-        if cupo.usados >= voucher_tipo.cupo_por_dia:
-            raise CupoAgotadoError(
-                f"Cupo diario agotado para {voucher_tipo.codigo}.",
-                details={
-                    "codigo": voucher_tipo.codigo,
-                    "cupo_por_dia": voucher_tipo.cupo_por_dia,
-                    "usados": cupo.usados,
-                },
+    return tickets[0]
+
+
+def _parse_positive_int(value: Any, *, field_name: str) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        raise CantidadInvalidaError(
+            f"El campo {field_name} debe ser numerico y mayor a cero."
+        )
+    if parsed < 1:
+        raise CantidadInvalidaError(
+            f"El campo {field_name} debe ser numerico y mayor a cero."
+        )
+    return parsed
+
+
+def normalizar_redeem_batch_items(items: list[dict[str, Any]]) -> list[tuple[str, int]]:
+    if not items:
+        raise CantidadInvalidaError("Debe enviar al menos un voucher para canjear.")
+
+    acumulado: dict[str, int] = {}
+    for raw in items:
+        voucher_codigo = str(raw.get("voucher") or raw.get("codigo") or "").upper().strip()
+        if not voucher_codigo:
+            raise VoucherInvalidoError("Cada item debe incluir el codigo de voucher.")
+
+        cantidad = _parse_positive_int(raw.get("cantidad", 1), field_name="cantidad")
+        acumulado[voucher_codigo] = acumulado.get(voucher_codigo, 0) + cantidad
+
+    ordered_codes = [codigo for codigo, _ in VoucherTipo.CODIGOS if codigo in acumulado]
+    ordered_codes += [codigo for codigo in acumulado if codigo not in ordered_codes]
+    return [(codigo, acumulado[codigo]) for codigo in ordered_codes]
+
+
+def redeem_vouchers_batch(
+    *,
+    dni: str,
+    items: list[dict[str, Any]],
+    totem_id: str,
+    dia: date | None = None,
+) -> list[Ticket]:
+    normalized_dni = normalizar_dni(dni)
+    if not normalized_dni:
+        raise PersonaNoEncontradaError("Debe ingresar un DNI valido.")
+
+    dia = dia or _hoy()
+    normalized_items = normalizar_redeem_batch_items(items)
+    requested_codes = [codigo for codigo, _ in normalized_items]
+    voucher_map = {
+        voucher.codigo: voucher
+        for voucher in VoucherTipo.objects.filter(codigo__in=requested_codes)
+    }
+
+    missing_codes = [code for code in requested_codes if code not in voucher_map]
+    if missing_codes:
+        raise VoucherInvalidoError(
+            "Uno o mas vouchers no existen.",
+            details={"codigos_invalidos": missing_codes},
+        )
+
+    with transaction.atomic():
+        persona = _get_persona(normalized_dni, lock=True)
+        tickets: list[Ticket] = []
+        for codigo, cantidad in normalized_items:
+            tickets.extend(
+                _redeem_locked(
+                    persona=persona,
+                    voucher_tipo=voucher_map[codigo],
+                    totem_id=totem_id,
+                    dia=dia,
+                    cantidad=cantidad,
+                )
             )
 
-        cupo.usados += 1
-        cupo.save(update_fields=["usados", "actualizado_en"])
+    audit_logger.info(
+        "batch_redeem_completed dni=%s dia=%s totem=%s cantidad_tickets=%s",
+        normalized_dni,
+        dia.isoformat(),
+        totem_id,
+        len(tickets),
+    )
+    return tickets
 
-        ticket: Ticket | None = None
-        for _ in range(3):
-            try:
-                ticket = Ticket.objects.create(
-                    persona=persona,
-                    voucher_tipo=voucher_tipo,
-                    dia=dia,
-                    totem_id=totem_id,
-                    ticket_numero=_build_ticket_number(
-                        dia=dia,
-                        voucher_codigo=voucher_tipo.codigo,
-                        totem_id=totem_id,
-                    ),
-                )
-                break
-            except IntegrityError:
-                continue
 
-        if ticket is None:
-            raise DomainError("No se pudo generar un ticket unico. Reintente.")
+def reporte_tickets_diario(*, dia: date | None = None) -> dict[str, Any]:
+    dia = dia or _hoy()
+    base_qs = Ticket.objects.filter(dia=dia)
 
-    return ticket
+    by_voucher = list(
+        base_qs.values("voucher_tipo__codigo")
+        .annotate(total=Count("id"))
+        .order_by("voucher_tipo__codigo")
+    )
+    by_totem = list(
+        base_qs.values("totem_id")
+        .annotate(total=Count("id"))
+        .order_by("totem_id")
+    )
+    top_invitados = list(
+        base_qs.filter(voucher_tipo__codigo=VoucherTipo.INVITADO)
+        .values("persona__dni", "persona__nombre_apellido")
+        .annotate(total=Count("id"))
+        .order_by("-total", "persona__dni")[:10]
+    )
+
+    return {
+        "dia": dia.isoformat(),
+        "total_tickets": base_qs.count(),
+        "por_voucher": [
+            {"voucher": row["voucher_tipo__codigo"], "total": row["total"]}
+            for row in by_voucher
+        ],
+        "por_totem": [{"totem_id": row["totem_id"], "total": row["total"]} for row in by_totem],
+        "top_invitados": [
+            {
+                "dni": row["persona__dni"],
+                "nombre_apellido": row["persona__nombre_apellido"],
+                "total": row["total"],
+            }
+            for row in top_invitados
+        ],
+        "generado_en": timezone.now().isoformat(),
+    }
+

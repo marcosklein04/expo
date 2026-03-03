@@ -10,25 +10,35 @@ Aplicacion de kiosco para emision de vouchers con control diario por persona/vou
 4. Canje de voucher
 5. Emision e impresion del ticket (`/tickets/<ticket_numero>/`)
 
-## API minima
+## API
 
 - `POST /api/lookup`
 - `POST /api/redeem`
+- `POST /api/redeem-batch`
+- `GET /api/reports/daily?dia=YYYY-MM-DD`
+- `GET /api/healthz`
+- `GET /healthz`
 
-Ejemplo `lookup`:
+`POST /api/*` requiere CSRF (flujo kiosk same-origin).
 
-```bash
-curl -X POST http://localhost:8000/api/lookup \
-  -H 'Content-Type: application/json' \
-  -d '{"dni":"30111222"}'
+Ejemplo `redeem-batch` (desde frontend):
+
+```json
+{
+  "dni": "30111222",
+  "totem_id": "TOTEM-01",
+  "items": [
+    {"voucher": "DESAYUNO", "cantidad": 1},
+    {"voucher": "ALMUERZO", "cantidad": 1},
+    {"voucher": "INVITADO", "cantidad": 2}
+  ]
+}
 ```
 
-Ejemplo `redeem`:
+Ejemplo `reportes`:
 
 ```bash
-curl -X POST http://localhost:8000/api/redeem \
-  -H 'Content-Type: application/json' \
-  -d '{"dni":"30111222","voucher":"DESAYUNO","totem_id":"TOTEM-01"}'
+curl "http://localhost:8000/api/reports/daily?dia=2026-03-02"
 ```
 
 ## Setup local
@@ -43,15 +53,24 @@ cp .env.example .env
 .venv/bin/python manage.py runserver
 ```
 
+Editar `.env` y definir `DJANGO_ENV=dev` para local o `DJANGO_ENV=prod` para nube.
+
+Tests:
+
+```bash
+DB_ENGINE=sqlite SQLITE_NAME=db_test.sqlite3 .venv/bin/python manage.py test
+```
+
 ## Setup MySQL
 
 Configurar variables de entorno:
 
 ```bash
 export DB_ENGINE=mysql
-export MYSQL_DATABASE=expo
-export MYSQL_USER=expo
-export MYSQL_PASSWORD=expo
+export DJANGO_ENV=prod
+export MYSQL_DATABASE=expo_kiosk
+export MYSQL_USER=expo_kiosk_user
+export MYSQL_PASSWORD=CHANGE_ME_STRONG_PASSWORD
 export MYSQL_HOST=127.0.0.1
 export MYSQL_PORT=3306
 ```
@@ -100,5 +119,6 @@ El importador detecta automaticamente la fila de cabecera, aunque no sea la prim
 - Configurar `DB_ENGINE=mysql` + credenciales gestionadas (RDS/Cloud SQL/Aurora).
 - Correr `manage.py migrate` y `manage.py seed_vouchers` en cada release.
 - Definir `DEFAULT_TOTEM_ID` distinto por totem.
-- Habilitar TLS, HSTS y cookies seguras en produccion.
-- Monitorear errores y auditoria en tabla `core_ticket`.
+- Habilitar TLS, `SECURE_SSL_REDIRECT`, HSTS y cookies seguras en produccion.
+- Monitorear errores y auditoria de emision (`kiosk.audit` logs + tabla `core_ticket`).
+- Exponer `/healthz` para monitoreo del balanceador.
