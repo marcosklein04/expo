@@ -6,9 +6,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Vouchers disponibles</title>
   <link rel="stylesheet" href="{% static 'style/style.css' %}">
+  <script src="{% static 'js/print.js' %}" defer></script>
+  <script src="{% static 'js/kiosk/vouchers.js' %}" defer></script>
 </head>
 <body class="page-vouchers">
-  <main class="kiosk-shell" id="screen">
+  <main
+    class="kiosk-shell"
+    id="screen"
+    data-idle-ms="{{ idle_seconds|default:0 }}000"
+    data-start-url="{% url 'kiosk:start' %}"
+    data-dni-url="{% url 'kiosk:dni' %}"
+    data-redeem-url="{% url 'api:redeem_batch' %}"
+    data-totem-id="{{ totem_id|default:'' }}"
+    data-persona-dni="{{ persona.dni|default:'' }}"
+    data-persona-nombre="{{ persona.nombre_apellido|default:'' }}"
+    data-persona-credencial="{{ persona.credencial|default:'-' }}"
+    data-persona-concesionario="{{ persona.concesionario|default:'-' }}"
+  >
     <div class="kiosk-brand" aria-label="Valtra Fendt">
       <span class="brand-valtra">VALTRA</span>
       <span class="brand-fendt">FENDT</span>
@@ -17,7 +31,7 @@
     {% if error %}
       <div class="error-box">{{ error }}</div>
       <section class="kiosk-center">
-        <button class="kiosk-button secondary" onclick="window.location.href='{% url 'kiosk:dni' %}'">Volver</button>
+        <button class="kiosk-button secondary" data-go-dni>Volver</button>
       </section>
     {% elif persona and comidas %}
       <h1 class="welcome-title">Bienvenido</h1>
@@ -72,12 +86,12 @@
       <section class="voucher-actions">
         <button class="kiosk-button" id="finalize-selection" disabled>Finalizar e imprimir</button>
         <button class="kiosk-button secondary" id="clear-selection" disabled>Limpiar selección</button>
-        <button class="kiosk-button secondary" onclick="window.location.href='{% url 'kiosk:dni' %}'">Otro DNI</button>
+        <button class="kiosk-button secondary" data-go-dni>Otro DNI</button>
       </section>
     {% else %}
       <div class="error-box">No hay comidas habilitadas para mostrar.</div>
       <section class="kiosk-center">
-        <button class="kiosk-button secondary" onclick="window.location.href='{% url 'kiosk:dni' %}'">Volver</button>
+        <button class="kiosk-button secondary" data-go-dni>Volver</button>
       </section>
     {% endif %}
 
@@ -92,399 +106,5 @@
     </section>
   </main>
 
-  <script>
-    const idleMs = {{ idle_seconds }} * 1000;
-    const startUrl = "{% url 'kiosk:start' %}";
-    let idleTimer;
-    let processing = false;
-    let lastPrintUrl = null;
-
-    const notice = document.getElementById("notice");
-    const selectedCount = document.getElementById("selected-count");
-    const flowPrinting = document.getElementById("flow-printing");
-    const flowPrintingText = document.getElementById("flow-printing-text");
-    const reprintLastBtn = document.getElementById("reprint-last");
-    const finalizeBtn = document.getElementById("finalize-selection");
-    const clearBtn = document.getElementById("clear-selection");
-
-    const mealCards = Array.from(document.querySelectorAll("[data-meal-card]"));
-    const ownByMeal = new Map();
-    const invitedByMeal = new Map();
-
-    const resetIdle = () => {
-      clearTimeout(idleTimer);
-      idleTimer = setTimeout(() => {
-        window.location.href = startUrl;
-      }, idleMs);
-    };
-
-    ["click", "touchstart", "keydown"].forEach((eventName) => {
-      document.addEventListener(eventName, resetIdle, { passive: true });
-    });
-
-    function getCookie(name) {
-      const value = `; ${document.cookie}`;
-      const parts = value.split(`; ${name}=`);
-      if (parts.length === 2) {
-        return parts.pop().split(";").shift();
-      }
-      return "";
-    }
-
-    function toNumber(value) {
-      return Number(value || "0");
-    }
-
-    function cardCode(card) {
-      return card.dataset.comida;
-    }
-
-    function fixedUsed(card) {
-      return toNumber(card.dataset.fixedUsed);
-    }
-
-    function fixedQuota(card) {
-      return toNumber(card.dataset.fixedQuota);
-    }
-
-    function fixedAvailable(card) {
-      return Math.max(toNumber(card.dataset.fixedAvailable), 0);
-    }
-
-    function fixedStockAvailable(card) {
-      return Math.max(toNumber(card.dataset.fixedStockAvailable), 0);
-    }
-
-    function canRedeemOwn(card) {
-      return fixedAvailable(card) > 0 && fixedStockAvailable(card) > 0;
-    }
-
-    function guestUsed(card) {
-      return toNumber(card.dataset.guestUsed);
-    }
-
-    function guestQuota(card) {
-      return toNumber(card.dataset.guestQuota);
-    }
-
-    function guestAvailable(card) {
-      return Math.max(toNumber(card.dataset.guestAvailable), 0);
-    }
-
-    function guestStockAvailable(card) {
-      return Math.max(toNumber(card.dataset.guestStockAvailable), 0);
-    }
-
-    function guestMax(card) {
-      return Math.max(Math.min(guestAvailable(card), guestStockAvailable(card)), 0);
-    }
-
-    function ownSelected(card) {
-      return ownByMeal.get(cardCode(card)) || false;
-    }
-
-    function invitedSelected(card) {
-      return invitedByMeal.get(cardCode(card)) || 0;
-    }
-
-    function setOwnSelected(card, selected) {
-      const next = Boolean(selected) && canRedeemOwn(card);
-      ownByMeal.set(cardCode(card), next);
-      updateCardUI(card);
-      updateSelectionInfo();
-    }
-
-    function setInvitedSelected(card, nextValue) {
-      const capped = Math.max(0, Math.min(nextValue, guestMax(card)));
-      invitedByMeal.set(cardCode(card), capped);
-      const valueLabel = card.querySelector("[data-role='guest-value']");
-      if (valueLabel) {
-        valueLabel.textContent = String(capped);
-      }
-      updateCardUI(card);
-      updateSelectionInfo();
-    }
-
-    function updateCardUI(card) {
-      const ownToggle = card.querySelector("[data-role='own-toggle']");
-      const ownHint = card.querySelector("[data-role='own-hint']");
-      const mealStatus = card.querySelector("[data-role='meal-status']");
-      const minusBtn = card.querySelector("[data-role='guest-minus']");
-      const plusBtn = card.querySelector("[data-role='guest-plus']");
-      const guestLimit = card.querySelector("[data-role='guest-limit']");
-      const guestHint = card.querySelector("[data-role='guest-hint']");
-
-      const ownAvailable = canRedeemOwn(card);
-      const ownIsSelected = ownSelected(card);
-      const invited = invitedSelected(card);
-      const invitedMax = guestMax(card);
-
-      card.classList.toggle("selected", ownIsSelected || invited > 0);
-
-      if (mealStatus) {
-        if (fixedAvailable(card) <= 0) {
-          mealStatus.textContent = "Voucher propio no disponible";
-        } else if (fixedStockAvailable(card) <= 0) {
-          mealStatus.textContent = "Sin stock propio";
-        } else {
-          mealStatus.textContent = "Voucher propio disponible";
-        }
-      }
-
-      if (ownHint) {
-        if (fixedAvailable(card) <= 0) {
-          ownHint.textContent = "Voucher propio: ya utilizado";
-        } else if (fixedStockAvailable(card) <= 0) {
-          ownHint.textContent = "Voucher propio: sin stock";
-        } else {
-          ownHint.textContent = "Voucher propio: disponible";
-        }
-      }
-
-      if (ownToggle) {
-        ownToggle.classList.remove("is-selected", "is-blocked");
-        ownToggle.disabled = processing || !ownAvailable;
-
-        if (ownAvailable) {
-          if (ownIsSelected) {
-            ownToggle.textContent = "SELECCIONADO";
-            ownToggle.classList.add("is-selected");
-          } else {
-            ownToggle.textContent = "CANJEAR MI VOUCHER";
-          }
-        } else {
-          ownToggle.classList.add("is-blocked");
-          ownToggle.textContent = fixedAvailable(card) <= 0 ? "YA UTILIZADO" : "SIN STOCK";
-        }
-      }
-
-      if (guestLimit) {
-        guestLimit.textContent = `${guestUsed(card)}/${guestQuota(card)}`;
-      }
-
-      if (guestHint) {
-        guestHint.textContent = `Pool invitados: ${guestStockAvailable(card)} disponible(s)`;
-      }
-
-      if (minusBtn) {
-        minusBtn.disabled = processing || invited <= 0;
-      }
-
-      if (plusBtn) {
-        plusBtn.disabled = processing || invited >= invitedMax;
-      }
-    }
-
-    function totals() {
-      let propios = 0;
-      let invitados = 0;
-
-      mealCards.forEach((card) => {
-        if (ownSelected(card)) {
-          propios += 1;
-        }
-        invitados += invitedSelected(card);
-      });
-
-      return {
-        propios,
-        invitados,
-        tickets: propios + invitados,
-      };
-    }
-
-    function buildBatchItems() {
-      const items = [];
-      mealCards.forEach((card) => {
-        const canjearPropio = ownSelected(card);
-        const invitados = invitedSelected(card);
-        if (!canjearPropio && invitados === 0) {
-          return;
-        }
-
-        items.push({
-          comida: cardCode(card),
-          canjear_propio: canjearPropio,
-          invitados,
-        });
-      });
-      return items;
-    }
-
-    function updateSelectionInfo() {
-      const { propios, invitados, tickets } = totals();
-      if (selectedCount) {
-        selectedCount.textContent = `${propios} propio(s) · ${invitados} invitado(s) · ${tickets} ticket(s)`;
-      }
-      if (finalizeBtn) {
-        finalizeBtn.disabled = processing || tickets === 0;
-      }
-      if (clearBtn) {
-        clearBtn.disabled = processing || tickets === 0;
-      }
-    }
-
-    function clearSelection() {
-      mealCards.forEach((card) => {
-        setOwnSelected(card, false);
-        setInvitedSelected(card, 0);
-      });
-      notice.textContent = "";
-      updateSelectionInfo();
-    }
-
-    function openPrintWindow(url) {
-      if (!url) return;
-      lastPrintUrl = url;
-      window.open(url, `ticket-${Date.now()}`, "width=420,height=720");
-    }
-
-    function showFlow(message = "") {
-      if (!flowPrinting) return;
-      if (!message) {
-        flowPrinting.classList.add("hidden");
-        return;
-      }
-      flowPrintingText.textContent = message;
-      flowPrinting.classList.remove("hidden");
-    }
-
-    async function redeemBatch(items) {
-      const response = await fetch("{% url 'api:redeem_batch' %}", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRFToken": getCookie("csrftoken"),
-        },
-        body: JSON.stringify({
-          dni: "{{ persona.dni|default:'' }}",
-          totem_id: "{{ totem_id }}",
-          items,
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok || !data.ok) {
-        throw new Error(data?.error?.message || "No se pudo emitir la selección.");
-      }
-      return data;
-    }
-
-    async function printTickets(tickets) {
-      for (let index = 0; index < tickets.length; index += 1) {
-        const ticket = tickets[index];
-        showFlow(`Imprimiendo ${index + 1} de ${tickets.length}...`);
-        openPrintWindow(ticket.print_url);
-        await new Promise((resolve) => setTimeout(resolve, 280));
-      }
-      showFlow("");
-    }
-
-    function applySuccess(items) {
-      items.forEach((item) => {
-        const card = mealCards.find((row) => cardCode(row) === item.comida);
-        if (!card) return;
-
-        if (item.canjear_propio) {
-          card.dataset.fixedUsed = String(fixedUsed(card) + 1);
-          card.dataset.fixedAvailable = String(Math.max(fixedAvailable(card) - 1, 0));
-          card.dataset.fixedStockAvailable = String(Math.max(fixedStockAvailable(card) - 1, 0));
-        }
-
-        if (item.invitados > 0) {
-          card.dataset.guestUsed = String(guestUsed(card) + item.invitados);
-          card.dataset.guestAvailable = String(Math.max(guestAvailable(card) - item.invitados, 0));
-          card.dataset.guestStockAvailable = String(
-            Math.max(guestStockAvailable(card) - item.invitados, 0)
-          );
-        }
-
-        setOwnSelected(card, false);
-        setInvitedSelected(card, 0);
-      });
-    }
-
-    async function finalizeSelection() {
-      if (processing) return;
-
-      const items = buildBatchItems();
-      if (items.length === 0) {
-        notice.textContent = "Seleccioná al menos una opción para canjear.";
-        return;
-      }
-
-      processing = true;
-      notice.textContent = "Procesando selección...";
-      mealCards.forEach((card) => updateCardUI(card));
-      updateSelectionInfo();
-
-      try {
-        const data = await redeemBatch(items);
-        await printTickets(data.tickets || []);
-
-        applySuccess(items);
-
-        const total = Number(data.total_tickets || 0);
-        notice.textContent = `${total} ticket(s) generado(s). Finalizando...`;
-        window.setTimeout(() => {
-          window.location.href = startUrl;
-        }, 1200);
-      } catch (error) {
-        notice.textContent = error.message || "No se pudo emitir la selección.";
-      } finally {
-        processing = false;
-        mealCards.forEach((card) => updateCardUI(card));
-        updateSelectionInfo();
-      }
-    }
-
-    if (reprintLastBtn) {
-      reprintLastBtn.addEventListener("click", () => {
-        if (lastPrintUrl) {
-          openPrintWindow(lastPrintUrl);
-        }
-      });
-    }
-
-    if (clearBtn) {
-      clearBtn.addEventListener("click", clearSelection);
-    }
-
-    if (finalizeBtn) {
-      finalizeBtn.addEventListener("click", finalizeSelection);
-    }
-
-    mealCards.forEach((card) => {
-      ownByMeal.set(cardCode(card), false);
-      invitedByMeal.set(cardCode(card), 0);
-
-      const ownToggle = card.querySelector("[data-role='own-toggle']");
-      const minusBtn = card.querySelector("[data-role='guest-minus']");
-      const plusBtn = card.querySelector("[data-role='guest-plus']");
-
-      if (ownToggle) {
-        ownToggle.addEventListener("click", () => {
-          setOwnSelected(card, !ownSelected(card));
-        });
-      }
-
-      if (minusBtn) {
-        minusBtn.addEventListener("click", () => {
-          setInvitedSelected(card, invitedSelected(card) - 1);
-        });
-      }
-
-      if (plusBtn) {
-        plusBtn.addEventListener("click", () => {
-          setInvitedSelected(card, invitedSelected(card) + 1);
-        });
-      }
-
-      updateCardUI(card);
-    });
-
-    updateSelectionInfo();
-    resetIdle();
-  </script>
 </body>
 </html>

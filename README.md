@@ -118,8 +118,11 @@ El importador detecta automaticamente la fila de cabecera, aunque no sea la prim
 
 ## Totems e impresion termica
 
-- El template de ticket usa formato 80mm y dispara `window.print()` automaticamente.
-- Para impresion sin dialogo en totem, configurar navegador en modo kiosco + politica de silent printing.
+- El flujo principal de impresion en totem Android usa **RawBT** via intent (`rawbt://`), igual que `turneraOnline`.
+- `Finalizar e imprimir` genera tickets en backend y el frontend dispara automaticamente el intent con ESC/POS.
+- En la pantalla inicial, la primera vez por sesion se envia `test` a RawBT para inicializar la conexion (mismo criterio que `turneraOnline`).
+- Si el dispositivo no es Android (o para pruebas), cae a impresion de navegador (`window.print()`).
+- Para forzar modo navegador manualmente usar: `/kiosk/vouchers/?dni=...&print_mode=browser`
 - Cada totem debe ejecutar con su propio `DEFAULT_TOTEM_ID` para trazabilidad de auditoria.
 
 ## CSS

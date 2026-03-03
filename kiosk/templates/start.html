@@ -6,8 +6,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Expo Kiosco</title>
   <link rel="stylesheet" href="{% static 'style/style.css' %}">
+  <script src="{% static 'js/print.js' %}" defer></script>
+  <script src="{% static 'js/kiosk/start.js' %}" defer></script>
 </head>
-<body class="page-start">
+<body class="page-start" data-dni-url="{% url 'kiosk:dni' %}">
   <main class="kiosk-shell" id="start-screen">
     <div class="kiosk-brand" aria-label="Valtra Fendt">
       <span class="brand-valtra">VALTRA</span>
@@ -25,13 +27,5 @@
     </section>
   </main>
 
-  <script>
-    const goDni = () => {
-      window.location.href = "{% url 'kiosk:dni' %}";
-    };
-
-    document.getElementById("start-btn").addEventListener("click", goDni);
-    document.getElementById("start-screen").addEventListener("touchstart", goDni, { passive: true });
-  </script>
 </body>
 </html>
