@@ -55,6 +55,7 @@ class VoucherServiceTests(TestCase):
             nombre_apellido="Emiliano Ferrari",
             concesionario="Demo",
             credencial="STAFF",
+            puede_invitar=True,
         )
         _seed_vouchers()
 
@@ -142,6 +143,23 @@ class VoucherServiceTests(TestCase):
                 items=[{"comida": VoucherTipo.ALMUERZO, "invitados": 1}],
             )
 
+    def test_redeem_batch_blocks_guests_even_if_flag_is_true_when_name_not_authorized(self):
+        persona_con_flag = Persona.objects.create(
+            empresa=self.empresa,
+            dni="34444555",
+            nombre_apellido="Nombre No Autorizado",
+            concesionario="Demo",
+            credencial="STAFF",
+            puede_invitar=True,
+        )
+
+        with self.assertRaises(CantidadInvalidaError):
+            redeem_vouchers_batch(
+                dni=persona_con_flag.dni,
+                totem_id="TOTEM-01",
+                items=[{"comida": VoucherTipo.DESAYUNO, "invitados": 1}],
+            )
+
     def test_redeem_batch_allows_unlimited_breakfast_guests_for_authorized_person(self):
         persona_autorizada = Persona.objects.create(
             empresa=self.empresa,
@@ -149,6 +167,7 @@ class VoucherServiceTests(TestCase):
             nombre_apellido="Luna arcamone",
             concesionario="Demo",
             credencial="STAFF",
+            puede_invitar=True,
         )
 
         tickets = redeem_vouchers_batch(

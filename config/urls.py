@@ -7,6 +7,7 @@ from api import views as api_views
 urlpatterns = [
     path("healthz", api_views.healthz, name="healthz"),
     path("admin/", admin.site.urls),
+    path("registro/", include(("core.urls", "core"), namespace="core")),
     path("api/", include(("api.urls", "api"), namespace="api")),
     path("tickets/", include(("tickets.urls", "tickets"), namespace="tickets")),
     path("", include(("kiosk.urls", "kiosk"), namespace="kiosk")),

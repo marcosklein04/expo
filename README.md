@@ -41,7 +41,7 @@ Reglas principales:
 
 - `DESAYUNO` y `ALMUERZO`: maximo 1 fijo por persona por dia.
 - `INVITADO_DESAYUNO` y `INVITADO_ALMUERZO`: maximo 5 por persona por comida y por dia.
-- Excepcion configurable: `ALMUERZO_INVITADOS_ILIMITADOS` permite lista de nombres con invitados ilimitados en desayuno y almuerzo.
+- Invitados ilimitados solo para estas personas (por nombre en base): `Emiliano Ferrari`, `Luna arcamone`, `Facundo Guzmán`, `Gesica pieditorti`.
 - Pools diarios configurables por entorno (`POOL_STOCK_*`) para cortar stock global.
 - Aislamiento multiempresa: persona y pools se resuelven por `empresa + totem`.
 - Cada click en `Finalizar e imprimir` se guarda como `CanjeOperacion` con items por comida.
@@ -90,7 +90,6 @@ export POOL_STOCK_FIJOS_DESAYUNO=120
 export POOL_STOCK_FIJOS_ALMUERZO=120
 export POOL_STOCK_INVITADOS_DESAYUNO=120
 export POOL_STOCK_INVITADOS_ALMUERZO=120
-export ALMUERZO_INVITADOS_ILIMITADOS="Emiliano Ferrari,Luna arcamone,Facundo Guzman,Gesica pieditorti"
 ```
 
 Aplicar esquema y datos base:
@@ -110,8 +109,13 @@ Columnas requeridas:
 
 - `DNI`
 - `Nombre y Apellido`
+
+Columnas opcionales:
+
 - `Concesionario`
 - `Credencial`
+- `Tipo de vianda` (`Clasico` o `Vegetariano`)
+- `Puede invitar` (`si/no`, `true/false`, `1/0`, `x`)
 
 Ejemplo real para Expoagro:
 

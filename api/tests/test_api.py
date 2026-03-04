@@ -21,6 +21,7 @@ class ApiTests(TestCase):
             nombre_apellido="Emiliano Ferrari",
             concesionario="Demo",
             credencial="STAFF",
+            puede_invitar=True,
         )
         VoucherTipo.objects.create(codigo=VoucherTipo.DESAYUNO, cupo_por_dia=1)
         VoucherTipo.objects.create(codigo=VoucherTipo.ALMUERZO, cupo_por_dia=1)

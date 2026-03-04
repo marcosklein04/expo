@@ -1,0 +1,52 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+  <h1>Registro de personas</h1>
+  <p>Empresa destino: <strong>{{ empresa.codigo }}</strong></p>
+  <p>Cargá datos del padrón y el tipo de vianda.</p>
+
+  <form method="post" style="max-width: 860px; margin-bottom: 24px;">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    <table>
+      {{ form.as_table }}
+    </table>
+    <div style="margin-top: 12px;">
+      <button type="submit" class="button">Guardar</button>
+    </div>
+  </form>
+
+  <h2>Últimas personas cargadas/actualizadas</h2>
+  <table id="result_list">
+    <thead>
+      <tr>
+        <th>Empresa</th>
+        <th>DNI/Pasaporte</th>
+        <th>Nombre y apellido</th>
+        <th>Concesionario</th>
+        <th>Credencial</th>
+        <th>Tipo de vianda</th>
+        <th>Activo</th>
+        <th>Actualizado</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for persona in recientes %}
+        <tr>
+          <td>{{ persona.empresa.codigo }}</td>
+          <td>{{ persona.dni }}</td>
+          <td>{{ persona.nombre_apellido }}</td>
+          <td>{{ persona.concesionario }}</td>
+          <td>{{ persona.credencial }}</td>
+          <td>{{ persona.get_tipo_vianda_display }}</td>
+          <td>{% if persona.activo %}Sí{% else %}No{% endif %}</td>
+          <td>{{ persona.actualizado_en|date:"d/m/Y H:i:s" }}</td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="8">No hay personas cargadas.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

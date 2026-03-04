@@ -2,13 +2,8 @@
 
 {% block object-tools-items %}
   <li>
-    <a href="{% url 'admin:core_ticket_export_detalle_3_dias' %}">
-      Descargar detalle 3 dias
-    </a>
-  </li>
-  <li>
-    <a href="{% url 'admin:core_ticket_export_resumen_3_dias' %}">
-      Descargar resumen 3 dias
+    <a href="{% url 'admin:core_ticket_resumen_dia' %}{% if request.GET.dia__exact %}?dia={{ request.GET.dia__exact }}{% endif %}">
+      Ver resumen del dia
     </a>
   </li>
   {{ block.super }}

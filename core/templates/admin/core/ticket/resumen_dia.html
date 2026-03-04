@@ -1,0 +1,56 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+  <h1>Resumen del dia {{ dia_label }}</h1>
+
+  <div style="margin: 0 0 16px; display: flex; gap: 10px; flex-wrap: wrap;">
+    <a class="button" href="{% url 'admin:core_ticket_export_resumen_dia' %}?dia={{ dia_iso }}">
+      Descargar CSV del dia
+    </a>
+    <a class="button" href="{% url 'admin:core_ticket_changelist' %}?dia__exact={{ dia_iso }}">
+      Volver a Tickets
+    </a>
+  </div>
+
+  <table id="result_list">
+    <thead>
+      <tr>
+        <th>DNI/Pasaporte</th>
+        <th>Nombre y apellido</th>
+        <th>Voucher Desayuno</th>
+        <th>Voucher almuerzo</th>
+        <th>invitado desayuno</th>
+        <th>invitado almuerzo</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+        <tr>
+          <td>{{ row.persona__dni }}</td>
+          <td>{{ row.persona__nombre_apellido }}</td>
+          <td>{{ row.voucher_desayuno }}</td>
+          <td>{{ row.voucher_almuerzo }}</td>
+          <td>{{ row.invitado_desayuno }}</td>
+          <td>{{ row.invitado_almuerzo }}</td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="6">No hay tickets para el dia seleccionado.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <th colspan="2">Totales ({{ totales.personas }} personas)</th>
+        <th>{{ totales.voucher_desayuno }}</th>
+        <th>{{ totales.voucher_almuerzo }}</th>
+        <th>{{ totales.invitado_desayuno }}</th>
+        <th>{{ totales.invitado_almuerzo }}</th>
+      </tr>
+      <tr>
+        <th colspan="5">Total vouchers del dia</th>
+        <th>{{ totales.total_vouchers }}</th>
+      </tr>
+    </tfoot>
+  </table>
+{% endblock %}

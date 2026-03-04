@@ -25,6 +25,12 @@ COLUMN_ALIASES = {
     "apellido y nombre": "nombre_apellido",
     "concesionario": "concesionario",
     "credencial": "credencial",
+    "tipo de vianda": "tipo_vianda",
+    "vianda": "tipo_vianda",
+    "puede invitar": "puede_invitar",
+    "invitar": "puede_invitar",
+    "habilita invitados": "puede_invitar",
+    "invitaciones": "puede_invitar",
 }
 REQUIRED_FIELDS = {"dni", "nombre_apellido"}
 
@@ -42,6 +48,20 @@ def _cell_to_text(value: object) -> str:
     if isinstance(value, float) and value.is_integer():
         return str(int(value))
     return str(value).strip()
+
+
+def _cell_to_bool(value: object) -> bool:
+    text = _cell_to_text(value).strip().lower()
+    if not text:
+        return False
+    return text in {"1", "si", "sí", "s", "true", "x", "yes", "y"}
+
+
+def _cell_to_vianda(value: object) -> str:
+    text = _cell_to_text(value).strip().lower()
+    if text in {"vegetariano", "veg", "vegetariana"}:
+        return Persona.VIANDA_VEGETARIANO
+    return Persona.VIANDA_CLASICO
 
 
 def _find_header_row(worksheet) -> tuple[int, dict[str, int]]:
@@ -147,8 +167,15 @@ class Command(BaseCommand):
                 "nombre_apellido": nombre_apellido,
                 "concesionario": concesionario,
                 "credencial": credencial,
+                "tipo_vianda": Persona.VIANDA_CLASICO,
                 "activo": True,
             }
+            if "tipo_vianda" in header_map:
+                defaults["tipo_vianda"] = _cell_to_vianda(row[header_map["tipo_vianda"]])
+            puede_invitar: bool | None = None
+            if "puede_invitar" in header_map:
+                puede_invitar = _cell_to_bool(row[header_map["puede_invitar"]])
+                defaults["puede_invitar"] = puede_invitar
 
             obj = Persona.objects.filter(empresa=empresa, dni=dni).first()
             was_created = False
@@ -190,6 +217,8 @@ class Command(BaseCommand):
                         "nombre_apellido",
                         "concesionario",
                         "credencial",
+                        "tipo_vianda",
+                        *(["puede_invitar"] if puede_invitar is not None else []),
                         "activo",
                         "actualizado_en",
                     ]
@@ -205,7 +234,8 @@ class Command(BaseCommand):
 
             self.stdout.write(
                 f"OK [{empresa.codigo}] {obj.dni} | {obj.nombre_apellido} | "
-                f"{obj.concesionario} | {obj.credencial}"
+                f"{obj.concesionario} | {obj.credencial} | vianda={obj.tipo_vianda} | "
+                f"puede_invitar={obj.puede_invitar}"
             )
 
         self.stdout.write(

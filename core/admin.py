@@ -1,9 +1,10 @@
 import csv
-from datetime import timedelta
+from datetime import date
 
 from django.contrib import admin
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.http import HttpResponse
+from django.template.response import TemplateResponse
 from django.urls import path
 from django.utils import timezone
 
@@ -36,8 +37,17 @@ class TotemAdmin(admin.ModelAdmin):
 
 @admin.register(Persona)
 class PersonaAdmin(admin.ModelAdmin):
-    list_display = ("empresa", "dni", "nombre_apellido", "concesionario", "credencial", "activo")
-    list_filter = ("empresa", "activo", "concesionario")
+    list_display = (
+        "empresa",
+        "dni",
+        "nombre_apellido",
+        "concesionario",
+        "credencial",
+        "tipo_vianda",
+        "puede_invitar",
+        "activo",
+    )
+    list_filter = ("empresa", "tipo_vianda", "puede_invitar", "activo", "concesionario")
     search_fields = ("empresa__codigo", "dni", "nombre_apellido", "credencial")
 
 
@@ -74,7 +84,6 @@ class TicketAdmin(admin.ModelAdmin):
         "persona__empresa__codigo",
     )
     change_list_template = "admin/core/ticket/change_list.html"
-    actions = ["exportar_detalle_ultimos_3_dias_csv", "exportar_resumen_ultimos_3_dias_csv"]
 
     @admin.display(description="Empresa")
     def persona_empresa(self, obj):
@@ -84,152 +93,127 @@ class TicketAdmin(admin.ModelAdmin):
         urls = super().get_urls()
         custom_urls = [
             path(
-                "export/detalle-3-dias/",
-                self.admin_site.admin_view(self.descargar_detalle_ultimos_3_dias),
-                name="core_ticket_export_detalle_3_dias",
+                "resumen-dia/",
+                self.admin_site.admin_view(self.ver_resumen_dia),
+                name="core_ticket_resumen_dia",
             ),
             path(
-                "export/resumen-3-dias/",
-                self.admin_site.admin_view(self.descargar_resumen_ultimos_3_dias),
-                name="core_ticket_export_resumen_3_dias",
+                "export/resumen-dia/",
+                self.admin_site.admin_view(self.descargar_resumen_dia),
+                name="core_ticket_export_resumen_dia",
             ),
         ]
         return custom_urls + urls
 
-    def _ultimos_tres_dias(self):
-        hoy = timezone.localdate()
-        desde = hoy - timedelta(days=2)
-        return desde, hoy
+    def _resolver_dia_exportacion(self, request):
+        raw_dia = str(request.GET.get("dia") or request.GET.get("dia__exact") or "").strip()
+        if raw_dia:
+            try:
+                return date.fromisoformat(raw_dia)
+            except ValueError:
+                pass
+        return timezone.localdate()
 
-    def _build_detalle_response_ultimos_3_dias(self):
-        desde, hoy = self._ultimos_tres_dias()
-
-        qs = (
-            Ticket.objects.select_related("persona__empresa", "voucher_tipo")
-            .filter(dia__gte=desde, dia__lte=hoy)
-            .order_by("dia", "persona__empresa__codigo", "persona__dni", "creado_en", "id")
-        )
-
-        response = HttpResponse(content_type="text/csv; charset=utf-8")
-        response["Content-Disposition"] = (
-            f'attachment; filename="tickets_detalle_{desde}_{hoy}.csv"'
-        )
-        response.write("\ufeff")
-
-        writer = csv.writer(response)
-        writer.writerow(
-            [
-                "dia",
-                "fecha_hora",
-                "empresa_codigo",
-                "empresa_nombre",
-                "totem_id",
-                "documento",
-                "nombre_apellido",
-                "concesionario",
-                "credencial",
-                "voucher_tipo",
-                "ticket_numero",
-            ]
-        )
-
-        for ticket in qs.iterator():
-            writer.writerow(
-                [
-                    ticket.dia.isoformat(),
-                    timezone.localtime(ticket.creado_en).isoformat(timespec="seconds"),
-                    ticket.persona.empresa.codigo,
-                    ticket.persona.empresa.nombre,
-                    ticket.totem_id,
-                    ticket.persona.dni,
-                    ticket.persona.nombre_apellido,
-                    ticket.persona.concesionario,
-                    ticket.persona.credencial,
-                    ticket.voucher_tipo.codigo,
-                    ticket.ticket_numero,
-                ]
-            )
-
-        return response
-
-    def _build_resumen_response_ultimos_3_dias(self):
-        desde, hoy = self._ultimos_tres_dias()
+    def _build_resumen_queryset_dia(self, request):
+        dia = self._resolver_dia_exportacion(request)
 
         resumen = (
-            Ticket.objects.filter(dia__gte=desde, dia__lte=hoy)
+            Ticket.objects.filter(dia=dia)
             .values(
-                "dia",
-                "persona__empresa__codigo",
-                "persona__empresa__nombre",
                 "persona__dni",
                 "persona__nombre_apellido",
-                "persona__concesionario",
-                "persona__credencial",
-                "voucher_tipo__codigo",
             )
-            .annotate(cantidad=Count("id"))
-            .order_by(
-                "dia",
-                "persona__empresa__codigo",
-                "persona__dni",
-                "voucher_tipo__codigo",
+            .annotate(
+                voucher_desayuno=Count(
+                    "id",
+                    filter=Q(voucher_tipo__codigo=VoucherTipo.DESAYUNO),
+                ),
+                voucher_almuerzo=Count(
+                    "id",
+                    filter=Q(voucher_tipo__codigo=VoucherTipo.ALMUERZO),
+                ),
+                invitado_desayuno=Count(
+                    "id",
+                    filter=Q(voucher_tipo__codigo=VoucherTipo.INVITADO_DESAYUNO),
+                ),
+                invitado_almuerzo=Count(
+                    "id",
+                    filter=Q(voucher_tipo__codigo=VoucherTipo.INVITADO_ALMUERZO),
+                ),
             )
+            .order_by("persona__nombre_apellido", "persona__dni")
         )
+        return dia, resumen
+
+    def _build_resumen_response_dia(self, request):
+        dia, resumen = self._build_resumen_queryset_dia(request)
+        dia_csv = dia.strftime("%d/%m/%y")
 
         response = HttpResponse(content_type="text/csv; charset=utf-8")
         response["Content-Disposition"] = (
-            f'attachment; filename="tickets_resumen_{desde}_{hoy}.csv"'
+            f'attachment; filename="tickets_resumen_{dia}.csv"'
         )
         response.write("\ufeff")
 
-        writer = csv.writer(response)
+        writer = csv.writer(response, delimiter=";")
         writer.writerow(
             [
-                "dia",
-                "empresa_codigo",
-                "empresa_nombre",
-                "documento",
-                "nombre_apellido",
-                "concesionario",
-                "credencial",
-                "voucher_tipo",
-                "cantidad",
+                "Fecha",
+                "DNI/Pasaporte",
+                "Nombre y apellido",
+                "Voucher Desayuno",
+                "Voucher almuerzo",
+                "invitado desayuno",
+                "invitado almuerzo",
             ]
         )
 
         for row in resumen.iterator():
             writer.writerow(
                 [
-                    row["dia"].isoformat(),
-                    row["persona__empresa__codigo"],
-                    row["persona__empresa__nombre"],
+                    dia_csv,
                     row["persona__dni"],
                     row["persona__nombre_apellido"],
-                    row["persona__concesionario"],
-                    row["persona__credencial"],
-                    row["voucher_tipo__codigo"],
-                    row["cantidad"],
+                    row["voucher_desayuno"],
+                    row["voucher_almuerzo"],
+                    row["invitado_desayuno"],
+                    row["invitado_almuerzo"],
                 ]
             )
 
         return response
 
-    def descargar_detalle_ultimos_3_dias(self, request):
-        return self._build_detalle_response_ultimos_3_dias()
+    def ver_resumen_dia(self, request):
+        dia, resumen = self._build_resumen_queryset_dia(request)
+        filas = list(resumen)
 
-    def descargar_resumen_ultimos_3_dias(self, request):
-        return self._build_resumen_response_ultimos_3_dias()
+        totales = {
+            "personas": len(filas),
+            "voucher_desayuno": sum(int(f["voucher_desayuno"]) for f in filas),
+            "voucher_almuerzo": sum(int(f["voucher_almuerzo"]) for f in filas),
+            "invitado_desayuno": sum(int(f["invitado_desayuno"]) for f in filas),
+            "invitado_almuerzo": sum(int(f["invitado_almuerzo"]) for f in filas),
+        }
+        totales["total_vouchers"] = (
+            totales["voucher_desayuno"]
+            + totales["voucher_almuerzo"]
+            + totales["invitado_desayuno"]
+            + totales["invitado_almuerzo"]
+        )
 
-    @admin.action(description="Exportar detalle CSV (ultimos 3 dias)")
-    def exportar_detalle_ultimos_3_dias_csv(self, request, queryset):
-        del queryset
-        return self._build_detalle_response_ultimos_3_dias()
+        context = {
+            **self.admin_site.each_context(request),
+            "opts": self.model._meta,
+            "title": "Resumen del dia",
+            "dia_iso": dia.isoformat(),
+            "dia_label": dia.strftime("%d/%m/%y"),
+            "rows": filas,
+            "totales": totales,
+        }
+        return TemplateResponse(request, "admin/core/ticket/resumen_dia.html", context)
 
-    @admin.action(description="Exportar resumen CSV (ultimos 3 dias)")
-    def exportar_resumen_ultimos_3_dias_csv(self, request, queryset):
-        del queryset
-        return self._build_resumen_response_ultimos_3_dias()
-
+    def descargar_resumen_dia(self, request):
+        return self._build_resumen_response_dia(request)
 
 @admin.register(PoolDiario)
 class PoolDiarioAdmin(admin.ModelAdmin):

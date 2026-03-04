@@ -66,6 +66,7 @@
     input.setAttribute("inputmode", "numeric");
     input.setAttribute("pattern", "[0-9]*");
     input.setAttribute("autocapitalize", "off");
+    input.classList.remove("is-passport");
     input.setAttribute("placeholder", "Ingresá tu DNI");
     hint.textContent = "Ingresá tu DNI sin puntos.";
   }
@@ -75,6 +76,7 @@
     input.setAttribute("inputmode", "text");
     input.removeAttribute("pattern");
     input.setAttribute("autocapitalize", "characters");
+    input.classList.add("is-passport");
     input.setAttribute("placeholder", "Ingresá tu pasaporte");
     hint.textContent = "Ingresá letras y números de tu pasaporte.";
   }

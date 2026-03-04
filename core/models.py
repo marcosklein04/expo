@@ -38,6 +38,13 @@ class Totem(models.Model):
 
 
 class Persona(models.Model):
+    VIANDA_CLASICO = "CLASICO"
+    VIANDA_VEGETARIANO = "VEGETARIANO"
+    VIANDA_CHOICES = [
+        (VIANDA_CLASICO, "Clasico"),
+        (VIANDA_VEGETARIANO, "Vegetariano"),
+    ]
+
     empresa = models.ForeignKey(
         Empresa,
         on_delete=models.PROTECT,
@@ -47,6 +54,12 @@ class Persona(models.Model):
     nombre_apellido = models.CharField(max_length=120)
     concesionario = models.CharField(max_length=120, blank=True, default="")
     credencial = models.CharField(max_length=50, blank=True, default="")
+    tipo_vianda = models.CharField(
+        max_length=12,
+        choices=VIANDA_CHOICES,
+        default=VIANDA_CLASICO,
+    )
+    puede_invitar = models.BooleanField(default=False)
     activo = models.BooleanField(default=True)
     creado_en = models.DateTimeField(default=timezone.now, editable=False)
     actualizado_en = models.DateTimeField(auto_now=True)

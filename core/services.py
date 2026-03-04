@@ -31,13 +31,13 @@ INVITADO_POR_COMIDA = {
     VoucherTipo.DESAYUNO: VoucherTipo.INVITADO_DESAYUNO,
     VoucherTipo.ALMUERZO: VoucherTipo.INVITADO_ALMUERZO,
 }
-ALMUERZO_INVITADOS_ILIMITADOS_DEFAULT = (
-    "Emiliano Ferrari",
-    "Luna arcamone",
-    "Facundo Guzman",
-    "Gesica pieditorti",
-)
-ALMUERZO_INVITADOS_ILIMITADOS_SOFT_MAX_UI = 999
+INVITADOS_ILIMITADOS_SOFT_MAX_UI = 999
+INVITADOS_AUTORIZADOS_FIJOS = {
+    "EMILIANO FERRARI",
+    "LUNA ARCAMONE",
+    "FACUNDO GUZMAN",
+    "GESICA PIEDITORTI",
+}
 
 
 class DomainError(Exception):
@@ -99,7 +99,7 @@ class ComidaEstado:
         if not self.invitados_habilitados_persona:
             return 0
         if self.invitados_ilimitados_persona:
-            return ALMUERZO_INVITADOS_ILIMITADOS_SOFT_MAX_UI
+            return INVITADOS_ILIMITADOS_SOFT_MAX_UI
         return max(self.cupo_invitados_persona - self.usados_invitados_persona, 0)
 
     @property
@@ -124,13 +124,6 @@ def normalizar_dni(raw_dni: str) -> str:
     return cleaned[: Persona._meta.get_field("dni").max_length]
 
 
-def normalizar_texto(raw_value: str) -> str:
-    text = str(raw_value or "").strip().upper()
-    text = unicodedata.normalize("NFKD", text)
-    text = "".join(ch for ch in text if not unicodedata.combining(ch))
-    return " ".join(text.split())
-
-
 def normalizar_codigo_empresa(raw_value: str) -> str:
     if not raw_value:
         return ""
@@ -140,28 +133,23 @@ def normalizar_codigo_empresa(raw_value: str) -> str:
     return cleaned[: Empresa._meta.get_field("codigo").max_length]
 
 
+def normalizar_texto(raw_value: str) -> str:
+    if not raw_value:
+        return ""
+    normalized = unicodedata.normalize("NFKD", str(raw_value).strip().upper())
+    return "".join(ch for ch in normalized if not unicodedata.combining(ch))
+
+
 def _default_empresa_codigo() -> str:
     return normalizar_codigo_empresa(
         str(getattr(settings, "DEFAULT_EMPRESA_CODE", "DEFAULT"))
     ) or "DEFAULT"
 
 
-def _almuerzo_invitados_ilimitados_normalizados() -> set[str]:
-    configured_names = getattr(settings, "ALMUERZO_INVITADOS_ILIMITADOS", None)
-    if configured_names is None:
-        configured_names = ALMUERZO_INVITADOS_ILIMITADOS_DEFAULT
-    return {normalizar_texto(name) for name in configured_names if str(name).strip()}
-
-
-def _persona_tiene_invitados_ilimitados_almuerzo(persona: Persona) -> bool:
-    persona_name = normalizar_texto(persona.nombre_apellido)
-    return bool(persona_name and persona_name in _almuerzo_invitados_ilimitados_normalizados())
-
-
 def _persona_puede_invitar_en_comida(*, persona: Persona, comida_codigo: str) -> bool:
     return (
         comida_codigo in COMIDAS
-        and _persona_tiene_invitados_ilimitados_almuerzo(persona)
+        and normalizar_texto(persona.nombre_apellido) in INVITADOS_AUTORIZADOS_FIJOS
     )
 
 
@@ -446,7 +434,7 @@ def _build_comidas_estado(*, persona: Persona, dia: date) -> list[ComidaEstado]:
                 cupo_fijos_persona=vouchers[comida_codigo].cupo_por_dia,
                 usados_fijos_persona=cupos.get(comida_codigo, 0),
                 cupo_invitados_persona=(
-                    ALMUERZO_INVITADOS_ILIMITADOS_SOFT_MAX_UI
+                    INVITADOS_ILIMITADOS_SOFT_MAX_UI
                     if invitados_ilimitados
                     else 0
                 ),
@@ -462,7 +450,7 @@ def _build_comidas_estado(*, persona: Persona, dia: date) -> list[ComidaEstado]:
                 ),
                 stock_fijos_usados=comida_pool.usados if comida_pool else 0,
                 stock_invitados_total=(
-                    ALMUERZO_INVITADOS_ILIMITADOS_SOFT_MAX_UI
+                    INVITADOS_ILIMITADOS_SOFT_MAX_UI
                     if invitados_ilimitados
                     else 0
                 ),
