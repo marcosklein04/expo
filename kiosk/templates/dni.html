@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Ingresar DNI</title>
+  <title>Ingresar Documento</title>
   <link rel="stylesheet" href="{% static 'style/style.css' %}">
   <script src="{% static 'js/kiosk/dni.js' %}" defer></script>
 </head>
@@ -16,18 +16,35 @@
 >
   <main class="kiosk-shell">
     <div class="kiosk-brand" aria-label="Valtra Fendt">
-      <span class="brand-valtra">VALTRA</span>
-      <span class="brand-fendt">FENDT</span>
+      <img class="brand-logo brand-logo-valtra" src="{% static 'images/valtra-logo.png' %}" alt="Valtra">
+      <img class="brand-logo brand-logo-fendt" src="{% static 'images/fendt-logo.svg' %}" alt="Fendt">
     </div>
-    <h1 class="kiosk-title">DNI</h1>
 
-    <input id="dni" class="dni-input" type="text" inputmode="numeric" maxlength="12" autocomplete="off" readonly>
+    <section class="document-panel">
+      <section class="document-type-toggle" aria-label="Tipo de documento">
+        <button type="button" class="document-type-btn is-active" data-doc-type="DNI">DNI</button>
+        <button type="button" class="document-type-btn" data-doc-type="PASAPORTE">Pasaporte</button>
+      </section>
 
-    <section class="number-pad" id="pad"></section>
+      <input
+        id="document-input"
+        class="document-input"
+        type="text"
+        inputmode="numeric"
+        pattern="[0-9]*"
+        maxlength="12"
+        autocomplete="off"
+        autocapitalize="off"
+        spellcheck="false"
+        enterkeyhint="done"
+        placeholder="Ingresá tu DNI"
+      >
 
-    <section class="dni-actions">
-      <button class="kiosk-button secondary" id="clear">Borrar</button>
-      <button class="kiosk-button" id="continue">Continuar</button>
+      <p class="document-hint" id="document-hint">Ingresá tu DNI sin puntos.</p>
+
+      <section class="dni-actions">
+        <button class="kiosk-button" id="continue">Confirmar</button>
+      </section>
     </section>
   </main>
 

@@ -1,11 +1,11 @@
 # Expo Kiosk Vouchers (Django + MySQL)
 
-Aplicacion de kiosco para emision de vouchers con control diario por persona/voucher, pools diarios de stock por comida y soporte para multiples totems con ticket termico.
+Aplicacion de kiosco para emision de vouchers con control diario por persona/voucher, pools diarios de stock por comida y soporte para multiples empresas y multiples totems con ticket termico.
 
 ## Flujo funcional
 
 1. Pantalla inicial (`/`)
-2. Ingreso DNI (`/kiosk/dni/`)
+2. Ingreso de documento (`/kiosk/dni/`) con selector `DNI / PASAPORTE` y teclado nativo Android
 3. Consulta de cupos del dia
 4. Canje de una o ambas comidas (desayuno/almuerzo) con invitados por comida
 5. Emision e impresion del ticket (`/tickets/<ticket_numero>/`)
@@ -15,9 +15,9 @@ Aplicacion de kiosco para emision de vouchers con control diario por persona/vou
 - `POST /api/lookup`
 - `POST /api/redeem`
 - `POST /api/redeem-batch`
-- `GET /api/reports/daily?dia=YYYY-MM-DD`
-- `GET /api/reports/redeems?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&dni=&totem_id=&limit=500`
-- `GET /api/reports/redeems.csv?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&dni=&totem_id=&limit=2000`
+- `GET /api/reports/daily?dia=YYYY-MM-DD&empresa_codigo=`
+- `GET /api/reports/redeems?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&dni=&totem_id=&empresa_codigo=&limit=500`
+- `GET /api/reports/redeems.csv?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&dni=&totem_id=&empresa_codigo=&limit=2000`
 - `GET /api/healthz`
 - `GET /healthz`
 
@@ -29,6 +29,7 @@ Ejemplo `redeem-batch` (desde frontend):
 {
   "dni": "30111222",
   "totem_id": "TOTEM-01",
+  "empresa_codigo": "VALTRA_FENDT",
   "items": [
     {"comida": "DESAYUNO", "invitados": 2},
     {"comida": "ALMUERZO", "invitados": 1}
@@ -40,7 +41,9 @@ Reglas principales:
 
 - `DESAYUNO` y `ALMUERZO`: maximo 1 fijo por persona por dia.
 - `INVITADO_DESAYUNO` y `INVITADO_ALMUERZO`: maximo 5 por persona por comida y por dia.
+- Excepcion configurable: `ALMUERZO_INVITADOS_ILIMITADOS` permite lista de nombres con invitados ilimitados en desayuno y almuerzo.
 - Pools diarios configurables por entorno (`POOL_STOCK_*`) para cortar stock global.
+- Aislamiento multiempresa: persona y pools se resuelven por `empresa + totem`.
 - Cada click en `Finalizar e imprimir` se guarda como `CanjeOperacion` con items por comida.
 - Cada ticket queda asociado a su operacion de canje para trazabilidad completa.
 
@@ -81,11 +84,13 @@ export MYSQL_DATABASE=expo_kiosk
 export MYSQL_USER=expo_kiosk_user
 export MYSQL_PASSWORD=CHANGE_ME_STRONG_PASSWORD
 export MYSQL_HOST=127.0.0.1
-export MYSQL_PORT=3306
+export MYSQL_PORT=3307
+export DEFAULT_EMPRESA_CODE=DEFAULT
 export POOL_STOCK_FIJOS_DESAYUNO=120
 export POOL_STOCK_FIJOS_ALMUERZO=120
 export POOL_STOCK_INVITADOS_DESAYUNO=120
 export POOL_STOCK_INVITADOS_ALMUERZO=120
+export ALMUERZO_INVITADOS_ILIMITADOS="Emiliano Ferrari,Luna arcamone,Facundo Guzman,Gesica pieditorti"
 ```
 
 Aplicar esquema y datos base:
@@ -98,7 +103,7 @@ Aplicar esquema y datos base:
 ## Importacion desde Excel
 
 ```bash
-.venv/bin/python manage.py import_personas_excel /ruta/personas.xlsx --sheet Hoja1
+.venv/bin/python manage.py import_personas_excel /ruta/personas.xlsx --sheet Hoja1 --empresa-code VALTRA_FENDT --empresa-name "Valtra Fendt"
 ```
 
 Columnas requeridas:
@@ -111,10 +116,17 @@ Columnas requeridas:
 Ejemplo real para Expoagro:
 
 ```bash
-.venv/bin/python manage.py import_personas_excel "/Users/marcosklein/Downloads/Listado comedor expoagro 2026.xlsx" --sheet Hoja1
+.venv/bin/python manage.py import_personas_excel "/Users/marcosklein/Downloads/Listado comedor expoagro 2026.xlsx" --sheet Hoja1 --empresa-code VALTRA_FENDT --empresa-name "Valtra Fendt"
 ```
 
 El importador detecta automaticamente la fila de cabecera, aunque no sea la primera.
+
+Registro de empresas/totems:
+
+```bash
+.venv/bin/python manage.py upsert_empresa --codigo VALTRA_FENDT --nombre "Valtra Fendt"
+.venv/bin/python manage.py upsert_totem --codigo TOTEM-01 --empresa-code VALTRA_FENDT --nombre "Totem 01"
+```
 
 ## Totems e impresion termica
 

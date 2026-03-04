@@ -73,7 +73,13 @@ def lookup(request):
     try:
         payload = _json_body(request)
         dni = str(payload.get("dni", ""))
-        result = lookup_persona_cupos(dni=dni)
+        totem_id = str(payload.get("totem_id") or settings.DEFAULT_TOTEM_ID).strip()
+        empresa_codigo = str(payload.get("empresa_codigo", "")).strip() or None
+        result = lookup_persona_cupos(
+            dni=dni,
+            totem_id=totem_id,
+            empresa_codigo=empresa_codigo,
+        )
         return JsonResponse({"ok": True, **result})
     except DomainError as exc:
         return _error_response(exc)
@@ -85,12 +91,14 @@ def redeem(request):
         payload = _json_body(request)
         dni = str(payload.get("dni", ""))
         voucher_codigo = str(payload.get("voucher", "")).upper().strip()
-        totem_id = str(payload.get("totem_id") or settings.DEFAULT_TOTEM_ID)
+        totem_id = str(payload.get("totem_id") or settings.DEFAULT_TOTEM_ID).strip()
+        empresa_codigo = str(payload.get("empresa_codigo", "")).strip() or None
 
         ticket = redeem_voucher(
             dni=dni,
             voucher_codigo=voucher_codigo,
             totem_id=totem_id,
+            empresa_codigo=empresa_codigo,
         )
         return JsonResponse({"ok": True, "ticket": _serialize_ticket(ticket)}, status=201)
     except DomainError as exc:
@@ -102,7 +110,8 @@ def redeem_batch(request):
     try:
         payload = _json_body(request)
         dni = str(payload.get("dni", ""))
-        totem_id = str(payload.get("totem_id") or settings.DEFAULT_TOTEM_ID)
+        totem_id = str(payload.get("totem_id") or settings.DEFAULT_TOTEM_ID).strip()
+        empresa_codigo = str(payload.get("empresa_codigo", "")).strip() or None
         items = payload.get("items") or []
         if not isinstance(items, list):
             raise DomainError("El campo items debe ser una lista de comidas.")
@@ -111,6 +120,7 @@ def redeem_batch(request):
             dni=dni,
             items=items,
             totem_id=totem_id,
+            empresa_codigo=empresa_codigo,
         )
         return JsonResponse(
             {
@@ -128,7 +138,13 @@ def redeem_batch(request):
 def report_daily(request):
     try:
         dia = _parse_iso_date(request.GET.get("dia"))
-        return JsonResponse({"ok": True, **reporte_tickets_diario(dia=dia)})
+        empresa_codigo = str(request.GET.get("empresa_codigo", "")).strip() or None
+        return JsonResponse(
+            {
+                "ok": True,
+                **reporte_tickets_diario(dia=dia, empresa_codigo=empresa_codigo),
+            }
+        )
     except DomainError as exc:
         return _error_response(exc)
 
@@ -140,6 +156,7 @@ def report_redeems(request):
         fecha_hasta = _parse_iso_date(request.GET.get("hasta"))
         dni = str(request.GET.get("dni", "")).strip() or None
         totem_id = str(request.GET.get("totem_id", "")).strip() or None
+        empresa_codigo = str(request.GET.get("empresa_codigo", "")).strip() or None
         limit = _parse_limit(request.GET.get("limit"), default=500)
 
         payload = reporte_operaciones_canje(
@@ -147,6 +164,7 @@ def report_redeems(request):
             fecha_hasta=fecha_hasta,
             dni=dni,
             totem_id=totem_id,
+            empresa_codigo=empresa_codigo,
             limit=limit,
         )
         return JsonResponse({"ok": True, **payload})
@@ -161,6 +179,7 @@ def report_redeems_csv(request):
         fecha_hasta = _parse_iso_date(request.GET.get("hasta"))
         dni = str(request.GET.get("dni", "")).strip() or None
         totem_id = str(request.GET.get("totem_id", "")).strip() or None
+        empresa_codigo = str(request.GET.get("empresa_codigo", "")).strip() or None
         limit = _parse_limit(request.GET.get("limit"), default=2000)
 
         payload = reporte_operaciones_canje(
@@ -168,6 +187,7 @@ def report_redeems_csv(request):
             fecha_hasta=fecha_hasta,
             dni=dni,
             totem_id=totem_id,
+            empresa_codigo=empresa_codigo,
             limit=limit,
         )
 
@@ -183,6 +203,7 @@ def report_redeems_csv(request):
                 "creado_en",
                 "dia",
                 "totem_id",
+                "empresa_codigo",
                 "dni",
                 "nombre_apellido",
                 "concesionario",
@@ -205,6 +226,7 @@ def report_redeems_csv(request):
                         operacion["creado_en"],
                         operacion["dia"],
                         operacion["totem_id"],
+                        operacion["persona"].get("empresa_codigo", ""),
                         operacion["persona"]["dni"],
                         operacion["persona"]["nombre_apellido"],
                         operacion["persona"]["concesionario"],

@@ -12,8 +12,8 @@
 <body class="page-start" data-dni-url="{% url 'kiosk:dni' %}">
   <main class="kiosk-shell" id="start-screen">
     <div class="kiosk-brand" aria-label="Valtra Fendt">
-      <span class="brand-valtra">VALTRA</span>
-      <span class="brand-fendt">FENDT</span>
+      <img class="brand-logo brand-logo-valtra" src="{% static 'images/valtra-logo.png' %}" alt="Valtra">
+      <img class="brand-logo brand-logo-fendt" src="{% static 'images/fendt-logo.svg' %}" alt="Fendt">
     </div>
 
     <section class="kiosk-center">
@@ -25,6 +25,10 @@
       </p>
       <button class="kiosk-button" id="start-btn">Comenzar</button>
     </section>
+
+    <div class="start-bottom-logo" aria-label="ADE">
+      <img src="{% static 'images/ade-logo.png' %}" alt="ADE">
+    </div>
   </main>
 
 </body>

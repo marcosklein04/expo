@@ -103,7 +103,7 @@ if DB_ENGINE == "mysql":
             "USER": os.getenv("MYSQL_USER", "expo_kiosk_user"),
             "PASSWORD": os.getenv("MYSQL_PASSWORD", "CHANGE_ME_STRONG_PASSWORD"),
             "HOST": os.getenv("MYSQL_HOST", "127.0.0.1"),
-            "PORT": os.getenv("MYSQL_PORT", "3306"),
+            "PORT": os.getenv("MYSQL_PORT", "3307"),
             "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60")),
             "OPTIONS": {
                 "charset": "utf8mb4",
@@ -132,11 +132,16 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 KIOSK_IDLE_SECONDS = int(os.getenv("KIOSK_IDLE_SECONDS", "45"))
+DEFAULT_EMPRESA_CODE = os.getenv("DEFAULT_EMPRESA_CODE", "DEFAULT")
 DEFAULT_TOTEM_ID = os.getenv("DEFAULT_TOTEM_ID", "TOTEM-01")
 POOL_STOCK_FIJOS_DESAYUNO = env_int("POOL_STOCK_FIJOS_DESAYUNO", 120)
 POOL_STOCK_FIJOS_ALMUERZO = env_int("POOL_STOCK_FIJOS_ALMUERZO", 120)
 POOL_STOCK_INVITADOS_DESAYUNO = env_int("POOL_STOCK_INVITADOS_DESAYUNO", 120)
 POOL_STOCK_INVITADOS_ALMUERZO = env_int("POOL_STOCK_INVITADOS_ALMUERZO", 120)
+ALMUERZO_INVITADOS_ILIMITADOS = env_list(
+    "ALMUERZO_INVITADOS_ILIMITADOS",
+    default="Emiliano Ferrari,Luna arcamone,Facundo Guzman,Gesica pieditorti",
+)
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 

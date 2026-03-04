@@ -28,8 +28,8 @@ def dni_screen(request):
 
 @ensure_csrf_cookie
 def vouchers_screen(request):
-    dni = request.GET.get("dni", "")
-    if not dni:
+    document = request.GET.get("doc") or request.GET.get("dni", "")
+    if not document:
         return redirect("kiosk:dni")
 
     context = {
@@ -43,7 +43,10 @@ def vouchers_screen(request):
     }
 
     try:
-        data = lookup_persona_cupos(dni=dni)
+        data = lookup_persona_cupos(
+            dni=document,
+            totem_id=settings.DEFAULT_TOTEM_ID,
+        )
         context.update(data)
     except DomainError as exc:
         context["error"] = exc.message

@@ -9,6 +9,9 @@
   const dniUrl = screen.dataset.dniUrl || "/";
   const redeemUrl = screen.dataset.redeemUrl || "";
   const totemId = screen.dataset.totemId || "";
+  const PRINTING_WAIT_MESSAGE = "Por favor, aguarde que se impriman todos sus vouchers";
+  const PRINTING_MIN_VISIBLE_MS = 20000;
+  const UNLIMITED_GUEST_SOFT_MAX = 999;
 
   const isAndroidDevice = /Android/i.test(navigator.userAgent || "");
   const forceBrowserMode = new URLSearchParams(window.location.search).get("print_mode") === "browser";
@@ -102,6 +105,10 @@
     return toNumber(card.dataset.guestUsed);
   }
 
+  function guestUnlimited(card) {
+    return card.dataset.guestUnlimited === "1";
+  }
+
   function guestQuota(card) {
     return toNumber(card.dataset.guestQuota);
   }
@@ -115,6 +122,9 @@
   }
 
   function guestMax(card) {
+    if (guestUnlimited(card)) {
+      return UNLIMITED_GUEST_SOFT_MAX;
+    }
     return Math.max(Math.min(guestAvailable(card), guestStockAvailable(card)), 0);
   }
 
@@ -198,7 +208,9 @@
     }
 
     if (guestLimit) {
-      guestLimit.textContent = `${guestUsed(card)}/${guestQuota(card)}`;
+      guestLimit.textContent = guestUnlimited(card)
+        ? "Ilimitado"
+        : `${guestUsed(card)}/${guestQuota(card)}`;
     }
 
     if (guestHint) {
@@ -338,7 +350,7 @@
 
     text += ALIGN_LEFT;
     text += `Nombre: ${personaPrintData.nombre}` + LF;
-    text += `DNI: ${personaPrintData.dni}` + LF;
+    text += `Documento: ${personaPrintData.dni}` + LF;
     text += `Credencial: ${personaPrintData.credencial || "-"}` + LF;
     text += `Concesionario: ${wrapText(personaPrintData.concesionario || "-", 30)}` + LF;
     text += SEP + LF;
@@ -413,6 +425,10 @@
     flowPrinting.classList.remove("hidden");
   }
 
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
   async function redeemBatch(items) {
     const response = await fetch(redeemUrl, {
       method: "POST",
@@ -437,24 +453,19 @@
 
   async function printTickets(tickets) {
     if (preferRawBt) {
-      showFlow(`Imprimiendo ${tickets.length} ticket(s)...`);
       for (let index = 0; index < tickets.length; index += 1) {
         const ticket = tickets[index];
-        showFlow(`Imprimiendo ${index + 1} de ${tickets.length}...`);
         printTicket(ticket);
-        await new Promise((resolve) => setTimeout(resolve, 850));
+        await sleep(850);
       }
-      showFlow("");
       return;
     }
 
     for (let index = 0; index < tickets.length; index += 1) {
       const ticket = tickets[index];
-      showFlow(`Imprimiendo ${index + 1} de ${tickets.length}...`);
       printTicket(ticket);
-      await new Promise((resolve) => setTimeout(resolve, 280));
+      await sleep(280);
     }
-    showFlow("");
   }
 
   function applySuccess(items) {
@@ -496,21 +507,30 @@
 
     processing = true;
     setNotice("Procesando selección...");
+    const flowStartedAt = Date.now();
+    showFlow(PRINTING_WAIT_MESSAGE);
     mealCards.forEach((card) => updateCardUI(card));
     updateSelectionInfo();
 
     try {
       const data = await redeemBatch(items);
       await printTickets(data.tickets || []);
+      const flowElapsed = Date.now() - flowStartedAt;
+      const remainingFlow = Math.max(PRINTING_MIN_VISIBLE_MS - flowElapsed, 0);
+      if (remainingFlow > 0) {
+        await sleep(remainingFlow);
+      }
 
       applySuccess(items);
 
       const total = Number(data.total_tickets || 0);
       setNotice(`${total} ticket(s) generado(s). Finalizando...`);
+      showFlow("");
       window.setTimeout(() => {
         window.location.href = startUrl;
       }, 1200);
     } catch (error) {
+      showFlow("");
       setNotice(error.message || "No se pudo emitir la selección.");
     } finally {
       processing = false;

@@ -3,10 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 import unicodedata
 
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
+from django.db import IntegrityError
 
-from core.models import Persona
-from core.services import normalizar_dni
+from core.models import Empresa, Persona
+from core.services import normalizar_codigo_empresa, normalizar_dni
 
 try:
     from openpyxl import load_workbook
@@ -72,6 +74,18 @@ class Command(BaseCommand):
             default=None,
             help="Nombre de hoja (si se omite usa la activa)",
         )
+        parser.add_argument(
+            "--empresa-code",
+            type=str,
+            default=None,
+            help="Codigo de empresa destino (si se omite usa DEFAULT_EMPRESA_CODE).",
+        )
+        parser.add_argument(
+            "--empresa-name",
+            type=str,
+            default=None,
+            help="Nombre de empresa (solo se usa al crear la empresa).",
+        )
 
     def handle(self, *args, **options):
         xlsx_path = Path(options["xlsx_path"])
@@ -81,10 +95,32 @@ class Command(BaseCommand):
         workbook = load_workbook(filename=xlsx_path, read_only=True, data_only=True)
         worksheet = workbook[options["sheet"]] if options["sheet"] else workbook.active
 
+        raw_empresa_code = (
+            options["empresa_code"] or getattr(settings, "DEFAULT_EMPRESA_CODE", "DEFAULT")
+        )
+        empresa_code = normalizar_codigo_empresa(str(raw_empresa_code)) or "DEFAULT"
+        empresa_name = str(options["empresa_name"] or empresa_code).strip() or empresa_code
+        empresa, empresa_created = Empresa.objects.get_or_create(
+            codigo=empresa_code,
+            defaults={"nombre": empresa_name, "activo": True},
+        )
+        if empresa.nombre != empresa_name:
+            empresa.nombre = empresa_name
+            empresa.save(update_fields=["nombre", "actualizado_en"])
+        if not empresa.activo:
+            empresa.activo = True
+            empresa.save(update_fields=["activo", "actualizado_en"])
+
+        if empresa_created:
+            self.stdout.write(
+                self.style.SUCCESS(f"Empresa creada: {empresa.codigo} ({empresa.nombre})")
+            )
+
         header_row, header_map = _find_header_row(worksheet)
 
         created = 0
         updated = 0
+        relinked = 0
         skipped_empty = 0
 
         for row in worksheet.iter_rows(min_row=header_row + 1, values_only=True):
@@ -107,27 +143,74 @@ class Command(BaseCommand):
             if "credencial" in header_map:
                 credencial = _cell_to_text(row[header_map["credencial"]])
 
-            obj, was_created = Persona.objects.update_or_create(
-                dni=dni,
-                defaults={
-                    "nombre_apellido": nombre_apellido,
-                    "concesionario": concesionario,
-                    "credencial": credencial,
-                    "activo": True,
-                },
-            )
+            defaults = {
+                "nombre_apellido": nombre_apellido,
+                "concesionario": concesionario,
+                "credencial": credencial,
+                "activo": True,
+            }
+
+            obj = Persona.objects.filter(empresa=empresa, dni=dni).first()
+            was_created = False
+            relinked_document = False
+
+            # Fix historical imports where passport letters were stripped and only digits remained.
+            if obj is None and any(ch.isalpha() for ch in dni):
+                candidate_qs = Persona.objects.filter(
+                    empresa=empresa,
+                    nombre_apellido=nombre_apellido,
+                    activo=True,
+                )
+                if concesionario:
+                    candidate_qs = candidate_qs.filter(concesionario=concesionario)
+                if credencial:
+                    candidate_qs = candidate_qs.filter(credencial=credencial)
+
+                if candidate_qs.count() == 1:
+                    candidate = candidate_qs.first()
+                    if candidate and candidate.dni.isdigit():
+                        candidate.dni = dni
+                        for field, value in defaults.items():
+                            setattr(candidate, field, value)
+                        try:
+                            candidate.save()
+                            obj = candidate
+                            relinked_document = True
+                        except IntegrityError:
+                            obj = None
+
+            if obj is None:
+                obj = Persona.objects.create(empresa=empresa, dni=dni, **defaults)
+                was_created = True
+            else:
+                for field, value in defaults.items():
+                    setattr(obj, field, value)
+                obj.save(
+                    update_fields=[
+                        "nombre_apellido",
+                        "concesionario",
+                        "credencial",
+                        "activo",
+                        "actualizado_en",
+                    ]
+                )
+
             if was_created:
                 created += 1
+            elif relinked_document:
+                relinked += 1
+                updated += 1
             else:
                 updated += 1
 
             self.stdout.write(
-                f"OK {obj.dni} | {obj.nombre_apellido} | {obj.concesionario} | {obj.credencial}"
+                f"OK [{empresa.codigo}] {obj.dni} | {obj.nombre_apellido} | "
+                f"{obj.concesionario} | {obj.credencial}"
             )
 
         self.stdout.write(
             self.style.SUCCESS(
-                "Importacion finalizada. "
-                f"creados={created} actualizados={updated} omitidos={skipped_empty}"
+                f"Importacion finalizada para empresa={empresa.codigo}. "
+                f"creados={created} actualizados={updated} relinked={relinked} omitidos={skipped_empty}"
             )
         )

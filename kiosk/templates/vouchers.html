@@ -24,8 +24,8 @@
     data-persona-concesionario="{{ persona.concesionario|default:'-' }}"
   >
     <div class="kiosk-brand" aria-label="Valtra Fendt">
-      <span class="brand-valtra">VALTRA</span>
-      <span class="brand-fendt">FENDT</span>
+      <img class="brand-logo brand-logo-valtra" src="{% static 'images/valtra-logo.png' %}" alt="Valtra">
+      <img class="brand-logo brand-logo-fendt" src="{% static 'images/fendt-logo.svg' %}" alt="Fendt">
     </div>
 
     {% if error %}
@@ -52,6 +52,7 @@
             data-guest-quota="{{ comida.invitados.cupo_persona }}"
             data-guest-available="{{ comida.invitados.disponibles_persona }}"
             data-guest-stock-available="{{ comida.invitados.stock_disponible }}"
+            data-guest-unlimited="{{ comida.invitados.ilimitado|yesno:'1,0' }}"
           >
             <div class="meal-head">
               <span class="meal-name">{{ comida.codigo }}</span>
@@ -64,18 +65,25 @@
             </div>
             <p class="own-hint" data-role="own-hint">Voucher propio disponible</p>
 
-            <div class="guest-picker">
-              <div class="guest-picker-head">
-                <span class="guest-title">Sumar invitados</span>
-                <span class="guest-limit" data-role="guest-limit">{{ comida.invitados.usados_persona }}/{{ comida.invitados.cupo_persona }}</span>
+            {% if comida.invitados.habilitado %}
+              <div class="guest-picker">
+                <div class="guest-picker-head">
+                  <span class="guest-title">Sumar invitados</span>
+                  <!--<span class="guest-limit" data-role="guest-limit">
+                    {% if comida.invitados.ilimitado %}
+                      Ilimitado
+                    {% else %}
+                      {{ comida.invitados.usados_persona }}/{{ comida.invitados.cupo_persona }}
+                    {% endif %}
+                  </span>-->
+                </div>
+                <div class="voucher-stepper guest-stepper">
+                  <button type="button" class="step-btn secondary" data-role="guest-minus">-</button>
+                  <span class="step-value" data-role="guest-value">0</span>
+                  <button type="button" class="step-btn" data-role="guest-plus">+</button>
+                </div>
               </div>
-              <div class="voucher-stepper guest-stepper">
-                <button type="button" class="step-btn secondary" data-role="guest-minus">-</button>
-                <span class="step-value" data-role="guest-value">0</span>
-                <button type="button" class="step-btn" data-role="guest-plus">+</button>
-              </div>
-              <p class="guest-hint" data-role="guest-hint">Pool invitados: {{ comida.invitados.stock_disponible }} disponible(s)</p>
-            </div>
+            {% endif %}
           </article>
         {% endfor %}
       </section>
@@ -97,11 +105,11 @@
 
     <section class="flow-screen hidden" id="flow-printing">
       <div class="kiosk-brand" aria-label="Valtra Fendt">
-        <span class="brand-valtra">VALTRA</span>
-        <span class="brand-fendt">FENDT</span>
+        <img class="brand-logo brand-logo-valtra" src="{% static 'images/valtra-logo.png' %}" alt="Valtra">
+        <img class="brand-logo brand-logo-fendt" src="{% static 'images/fendt-logo.svg' %}" alt="Fendt">
       </div>
       <h2>Imprimiendo vouchers</h2>
-      <p id="flow-printing-text">Retirá tus tickets del tótem.</p>
+      <p id="flow-printing-text">Por favor, aguarde que se impriman todos sus vouchers.</p>
       <button class="kiosk-button" id="reprint-last">Reimprimir último</button>
     </section>
   </main>

@@ -25,6 +25,7 @@
   --brand-green: #0a8f3f;
   --line: #1f1f1f;
   --line-soft: #b8b8b8;
+  --kiosk-max-width: 720px;
 }
 
 body.page-start,
@@ -41,13 +42,13 @@ body.page-vouchers {
 }
 
 .kiosk-shell {
-  width: min(420px, 100vw);
+  width: min(var(--kiosk-max-width), 100vw);
   min-height: 100vh;
   background: var(--panel);
-  padding: 28px 20px 26px;
+  padding: 30px clamp(20px, 4.5vw, 34px) 28px;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   position: relative;
   overflow: hidden;
 }
@@ -56,31 +57,27 @@ body.page-vouchers {
   position: relative;
   z-index: 1;
   display: flex;
-  gap: 12px;
+  gap: 16px;
   align-items: center;
   justify-content: center;
   margin: 6px 0 18px;
   width: 100%;
 }
 
-.brand-valtra {
-  font-size: 2rem;
-  line-height: 1;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  color: #ffffff;
-  -webkit-text-stroke: 2px #1f1f1f;
-  text-transform: uppercase;
+.brand-logo {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  object-fit: contain;
 }
 
-.brand-fendt {
-  font-size: 1.95rem;
-  line-height: 1;
-  font-weight: 700;
-  font-style: italic;
-  letter-spacing: 0.02em;
-  color: var(--brand-green);
-  text-transform: uppercase;
+.brand-logo-valtra {
+  width: clamp(168px, 32vw, 300px);
+}
+
+.brand-logo-fendt {
+  width: clamp(142px, 26vw, 236px);
 }
 
 .kiosk-title {
@@ -103,15 +100,15 @@ body.page-vouchers {
   justify-content: center;
   align-items: center;
   text-align: center;
-  gap: 18px;
+  gap: 22px;
 }
 
 .kiosk-button {
   border: 2px solid var(--line);
   border-radius: 999px;
-  min-height: 46px;
-  padding: 0 22px;
-  font-size: 0.9rem;
+  min-height: 52px;
+  padding: 0 26px;
+  font-size: 1rem;
   font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -145,28 +142,132 @@ body.page-vouchers {
   font-weight: 700;
 }
 
+.page-start .kiosk-shell {
+  padding-bottom: 132px;
+}
+
+.start-bottom-logo {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  width: min(170px, 42vw);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.start-bottom-logo img {
+  width: 100%;
+  height: auto;
+  display: block;
+  filter: brightness(0) saturate(100%);
+}
+
 /* DNI */
-.dni-input {
+.page-dni .kiosk-shell {
+  justify-content: flex-start;
+  padding-top: 46px;
+}
+
+.document-panel {
+  width: 100%;
+  max-width: none;
+  margin-top: 22px;
+  display: grid;
+  justify-items: center;
+}
+
+.document-type-toggle {
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 290px;
-  min-height: 52px;
-  border: 2px solid var(--line);
-  border-radius: 999px;
-  background: #ffffff;
-  color: var(--ink);
-  text-align: center;
-  font-size: 1.15rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  padding: 8px 16px;
-  margin: 10px 0 14px;
+  max-width: none;
+  display: grid;
+  grid-template-columns: 1fr 1.7fr;
+  gap: 12px;
+  margin: 0 0 18px;
 }
 
-.number-pad {
+.document-type-btn {
+  border: 0;
+  border-radius: 999px;
+  min-height: 66px;
+  background: #6a6a6a;
+  color: #ffffff;
+  text-transform: uppercase;
+  font-size: 1.26rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+
+.document-type-btn.is-active {
+  background: #005f21;
+}
+
+.document-input {
   position: relative;
   z-index: 1;
+  width: 100%;
+  max-width: none;
+  min-height: 118px;
+  border: 0;
+  border-radius: 60px;
+  background: #dcdcdc;
+  color: var(--ink);
+  text-align: center;
+  font-size: 1.64rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 14px 28px;
+}
+
+.document-input::placeholder {
+  color: #8a8a8a;
+  letter-spacing: 0.02em;
+  font-size: 1.08rem;
+}
+
+.document-hint {
+  position: relative;
+  z-index: 1;
+  margin: 10px 0 0;
+  min-height: 20px;
+  width: 100%;
+  max-width: none;
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+}
+
+.dni-actions {
+  position: relative;
+  z-index: 1;
+  margin-top: 26px;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.dni-actions .kiosk-button {
+  width: 100%;
+  max-width: 420px;
+  background: #6a6a6a;
+  border-color: #6a6a6a;
+  min-height: 60px;
+  font-size: 1.2rem;
+}
+
+.dni-actions .kiosk-button[disabled] {
+  opacity: 0.35;
+}
+
+/*
+Legacy keypad classes kept for compatibility with previous snapshots.
+They are no longer used in the current Android keyboard flow.
+*/
+.number-pad {
   width: 100%;
   max-width: 248px;
   display: grid;
@@ -193,34 +294,28 @@ body.page-vouchers {
   visibility: hidden;
 }
 
-.dni-actions {
-  position: relative;
-  z-index: 1;
-  margin-top: 16px;
-  display: flex;
-  gap: 10px;
-}
-
 /* Vouchers */
 .welcome-title {
   position: relative;
   z-index: 1;
-  margin: 2px 0 0;
+  margin: 0 0 14px;
   text-transform: uppercase;
-  font-size: 1.35rem;
+  font-size: 1.55rem;
   letter-spacing: 0.03em;
   text-align: center;
+  width: 100%;
 }
 
 .welcome-name {
   position: relative;
   z-index: 1;
-  margin: 2px 0 8px;
+  margin: 0 0 16px;
   text-transform: uppercase;
-  font-size: 1.12rem;
+  font-size: 1.25rem;
   letter-spacing: 0.02em;
   text-align: center;
-  max-width: 19ch;
+  width: 100%;
+  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -229,26 +324,38 @@ body.page-vouchers {
 .voucher-copy {
   position: relative;
   z-index: 1;
-  margin: 0 0 12px;
+  margin: 0 0 20px;
   text-transform: uppercase;
-  font-size: 0.95rem;
+  font-size: 1.02rem;
   letter-spacing: 0.03em;
   color: var(--ink-soft);
+  width: 100%;
+  text-align: center;
+}
+
+.page-vouchers .kiosk-shell {
+  padding-top: 26px;
+  padding-bottom: 30px;
+  overflow-y: auto;
+}
+
+.page-vouchers .kiosk-brand {
+  margin-bottom: 30px;
 }
 
 .meal-list {
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 335px;
+  max-width: none;
   display: grid;
-  gap: 10px;
+  gap: 14px;
 }
 
 .meal-card {
   border: 2px solid var(--line-soft);
-  border-radius: 14px;
-  padding: 10px 12px;
+  border-radius: 16px;
+  padding: 14px 16px;
   background: #ffffff;
 }
 
@@ -266,26 +373,27 @@ body.page-vouchers {
   font-weight: 700;
   letter-spacing: 0.02em;
   text-transform: uppercase;
-  font-size: 1.02rem;
+  font-size: 1.18rem;
 }
 
 .meal-status {
-  font-size: 0.76rem;
+  font-size: 0.84rem;
   text-transform: uppercase;
   color: var(--ink-soft);
   letter-spacing: 0.03em;
+  text-align: right;
 }
 
 .own-row {
-  margin-top: 8px;
+  margin-top: 10px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .own-label {
-  font-size: 0.84rem;
+  font-size: 0.94rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   text-transform: uppercase;
@@ -294,9 +402,9 @@ body.page-vouchers {
 .own-toggle-btn {
   border: 2px solid var(--line);
   border-radius: 999px;
-  min-height: 34px;
-  padding: 0 12px;
-  font-size: 0.72rem;
+  min-height: 42px;
+  padding: 0 14px;
+  font-size: 0.8rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   text-transform: uppercase;
@@ -321,24 +429,24 @@ body.page-vouchers {
 }
 
 .own-hint {
-  margin: 6px 0 0;
-  font-size: 0.78rem;
+  margin: 8px 0 0;
+  font-size: 0.86rem;
   color: var(--ink-soft);
 }
 
 .voucher-stepper {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
-  gap: 8px;
+  gap: 12px;
   align-items: center;
-  margin-top: 8px;
+  margin-top: 10px;
 }
 
 .step-btn {
   border: 2px solid var(--line);
   border-radius: 999px;
-  min-height: 38px;
-  font-size: 1.08rem;
+  min-height: 46px;
+  font-size: 1.2rem;
   font-weight: 700;
   color: #ffffff;
   background: var(--line);
@@ -356,16 +464,16 @@ body.page-vouchers {
 }
 
 .step-value {
-  min-width: 34px;
+  min-width: 42px;
   text-align: center;
-  font-size: 1.06rem;
+  font-size: 1.2rem;
   font-weight: 700;
 }
 
 .guest-picker {
-  margin-top: 10px;
+  margin-top: 12px;
   border-top: 1px solid #dbdbdb;
-  padding-top: 10px;
+  padding-top: 12px;
 }
 
 .guest-picker-head {
@@ -375,14 +483,14 @@ body.page-vouchers {
 }
 
 .guest-title {
-  font-size: 0.86rem;
+  font-size: 0.95rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.02em;
 }
 
 .guest-limit {
-  font-size: 0.82rem;
+  font-size: 0.9rem;
   font-weight: 700;
   color: var(--ink-soft);
 }
@@ -392,39 +500,48 @@ body.page-vouchers {
 }
 
 .guest-hint {
-  margin: 8px 0 0;
-  font-size: 0.78rem;
+  margin: 10px 0 0;
+  font-size: 0.86rem;
   color: var(--ink-soft);
 }
 
 .selection-info {
   position: relative;
   z-index: 1;
-  margin: 10px 0 0;
+  margin: 14px 0 0;
   color: var(--ink-soft);
-  font-size: 0.9rem;
+  font-size: 0.96rem;
   letter-spacing: 0.01em;
+  text-align: center;
 }
 
 .notice {
   position: relative;
   z-index: 1;
-  min-height: 22px;
-  margin-top: 9px;
+  min-height: 24px;
+  margin-top: 12px;
   text-align: center;
   color: #0b5e2a;
-  font-size: 0.86rem;
+  font-size: 0.92rem;
   font-weight: 700;
 }
 
 .voucher-actions {
   position: relative;
   z-index: 1;
-  margin-top: 12px;
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-  flex-wrap: wrap;
+  margin-top: 18px;
+  width: 100%;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.voucher-actions .kiosk-button {
+  width: 100%;
+}
+
+.voucher-actions .kiosk-button:first-child {
+  grid-column: 1 / -1;
 }
 
 .error-box {
@@ -485,13 +602,12 @@ body.page-vouchers {
     gap: 26px;
   }
 
-  .brand-valtra {
-    font-size: 4.5rem;
-    -webkit-text-stroke: 4px #1f1f1f;
+  .brand-logo-valtra {
+    width: 410px;
   }
 
-  .brand-fendt {
-    font-size: 4.4rem;
+  .brand-logo-fendt {
+    width: 320px;
   }
 
   .kiosk-title {
@@ -510,33 +626,44 @@ body.page-vouchers {
     border-width: 3px;
   }
 
-  .dni-input {
-    max-width: 720px;
-    min-height: 94px;
-    font-size: 2.3rem;
-    border-width: 3px;
-    margin: 20px 0 26px;
+  .document-type-toggle {
+    max-width: 760px;
+    margin: 0 0 24px;
+    gap: 16px;
   }
 
-  .number-pad {
-    max-width: 690px;
-    gap: 12px;
+  .document-type-btn {
+    min-height: 102px;
+    font-size: 2.15rem;
   }
 
-  .number-key,
-  .number-gap {
-    min-height: 94px;
+  .document-input {
+    max-width: 760px;
+    min-height: 198px;
+    border-radius: 74px;
+    font-size: 3.35rem;
+    padding: 10px 30px;
   }
 
-  .number-key {
-    border-width: 3px;
-    border-radius: 12px;
-    font-size: 2.4rem;
+  .document-input::placeholder {
+    font-size: 2rem;
+  }
+
+  .document-hint {
+    max-width: 760px;
+    min-height: 40px;
+    font-size: 1.34rem;
   }
 
   .dni-actions {
-    margin-top: 24px;
+    margin-top: 30px;
     gap: 16px;
+  }
+
+  .dni-actions .kiosk-button {
+    min-width: 380px;
+    min-height: 94px;
+    font-size: 2rem;
   }
 
   .welcome-title {
@@ -650,6 +777,143 @@ body.page-vouchers {
 
   .flow-screen p {
     font-size: 1.5rem;
+  }
+}
+
+/* Totem 720x1280 portrait */
+@media (orientation: portrait) and (min-width: 680px) and (max-width: 860px) and (min-height: 1100px) {
+  .kiosk-shell {
+    padding: 38px 34px 34px;
+  }
+
+  .kiosk-brand {
+    margin: 8px 0 24px;
+    gap: 18px;
+  }
+
+  .page-vouchers .kiosk-brand {
+    margin-bottom: 36px;
+  }
+
+  .brand-logo-valtra {
+    width: 312px;
+  }
+
+  .brand-logo-fendt {
+    width: 238px;
+  }
+
+  .start-prompt {
+    font-size: 3.1rem;
+    gap: 8px;
+  }
+
+  .kiosk-button {
+    min-height: 62px;
+    font-size: 1.2rem;
+  }
+
+  .document-type-btn {
+    min-height: 82px;
+    font-size: 1.58rem;
+  }
+
+  .document-input {
+    min-height: 134px;
+    font-size: 2rem;
+    border-radius: 58px;
+  }
+
+  .document-hint {
+    font-size: 1rem;
+  }
+
+  .dni-actions .kiosk-button {
+    max-width: 500px;
+    min-height: 70px;
+    font-size: 1.42rem;
+  }
+
+  .welcome-title {
+    font-size: 1.95rem;
+    margin-bottom: 20px;
+  }
+
+  .welcome-name {
+    font-size: 1.48rem;
+    margin-bottom: 20px;
+  }
+
+  .voucher-copy {
+    margin-bottom: 26px;
+    font-size: 1.16rem;
+  }
+
+  .meal-list {
+    gap: 16px;
+  }
+
+  .meal-card {
+    padding: 18px 20px;
+    border-radius: 18px;
+  }
+
+  .meal-name {
+    font-size: 1.34rem;
+  }
+
+  .meal-status {
+    font-size: 0.95rem;
+  }
+
+  .own-label {
+    font-size: 1.08rem;
+  }
+
+  .own-toggle-btn {
+    min-height: 48px;
+    font-size: 0.9rem;
+    padding: 0 18px;
+  }
+
+  .own-hint {
+    font-size: 0.95rem;
+  }
+
+  .guest-title {
+    font-size: 1.1rem;
+  }
+
+  .guest-limit {
+    font-size: 1rem;
+  }
+
+  .voucher-stepper {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 18px;
+    margin-top: 12px;
+  }
+
+  .step-btn {
+    min-height: 56px;
+    font-size: 1.45rem;
+  }
+
+  .step-value {
+    font-size: 1.42rem;
+    min-width: 60px;
+  }
+
+  .guest-hint {
+    font-size: 0.95rem;
+  }
+
+  .selection-info {
+    font-size: 1.05rem;
+  }
+
+  .notice {
+    font-size: 1rem;
   }
 }
 

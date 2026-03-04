@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import unicodedata
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
@@ -15,9 +16,11 @@ from core.models import (
     CanjeOperacion,
     CanjeOperacionItem,
     CupoDiario,
+    Empresa,
     Persona,
     PoolDiario,
     Ticket,
+    Totem,
     VoucherTipo,
 )
 
@@ -28,6 +31,13 @@ INVITADO_POR_COMIDA = {
     VoucherTipo.DESAYUNO: VoucherTipo.INVITADO_DESAYUNO,
     VoucherTipo.ALMUERZO: VoucherTipo.INVITADO_ALMUERZO,
 }
+ALMUERZO_INVITADOS_ILIMITADOS_DEFAULT = (
+    "Emiliano Ferrari",
+    "Luna arcamone",
+    "Facundo Guzman",
+    "Gesica pieditorti",
+)
+ALMUERZO_INVITADOS_ILIMITADOS_SOFT_MAX_UI = 999
 
 
 class DomainError(Exception):
@@ -73,6 +83,8 @@ class ComidaEstado:
     usados_fijos_persona: int
     cupo_invitados_persona: int
     usados_invitados_persona: int
+    invitados_habilitados_persona: bool
+    invitados_ilimitados_persona: bool
     stock_fijos_total: int
     stock_fijos_usados: int
     stock_invitados_total: int
@@ -84,6 +96,10 @@ class ComidaEstado:
 
     @property
     def disponibles_invitados_persona(self) -> int:
+        if not self.invitados_habilitados_persona:
+            return 0
+        if self.invitados_ilimitados_persona:
+            return ALMUERZO_INVITADOS_ILIMITADOS_SOFT_MAX_UI
         return max(self.cupo_invitados_persona - self.usados_invitados_persona, 0)
 
     @property
@@ -92,6 +108,8 @@ class ComidaEstado:
 
     @property
     def stock_invitados_disponible(self) -> int:
+        if not self.invitados_habilitados_persona:
+            return 0
         return max(self.stock_invitados_total - self.stock_invitados_usados, 0)
 
 
@@ -102,7 +120,110 @@ def _hoy() -> date:
 def normalizar_dni(raw_dni: str) -> str:
     if not raw_dni:
         return ""
-    return "".join(ch for ch in str(raw_dni).strip() if ch.isdigit())
+    cleaned = "".join(ch for ch in str(raw_dni).strip().upper() if ch.isalnum())
+    return cleaned[: Persona._meta.get_field("dni").max_length]
+
+
+def normalizar_texto(raw_value: str) -> str:
+    text = str(raw_value or "").strip().upper()
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return " ".join(text.split())
+
+
+def normalizar_codigo_empresa(raw_value: str) -> str:
+    if not raw_value:
+        return ""
+    cleaned = "".join(
+        ch for ch in str(raw_value).strip().upper() if ch.isalnum() or ch in {"_", "-"}
+    )
+    return cleaned[: Empresa._meta.get_field("codigo").max_length]
+
+
+def _default_empresa_codigo() -> str:
+    return normalizar_codigo_empresa(
+        str(getattr(settings, "DEFAULT_EMPRESA_CODE", "DEFAULT"))
+    ) or "DEFAULT"
+
+
+def _almuerzo_invitados_ilimitados_normalizados() -> set[str]:
+    configured_names = getattr(settings, "ALMUERZO_INVITADOS_ILIMITADOS", None)
+    if configured_names is None:
+        configured_names = ALMUERZO_INVITADOS_ILIMITADOS_DEFAULT
+    return {normalizar_texto(name) for name in configured_names if str(name).strip()}
+
+
+def _persona_tiene_invitados_ilimitados_almuerzo(persona: Persona) -> bool:
+    persona_name = normalizar_texto(persona.nombre_apellido)
+    return bool(persona_name and persona_name in _almuerzo_invitados_ilimitados_normalizados())
+
+
+def _persona_puede_invitar_en_comida(*, persona: Persona, comida_codigo: str) -> bool:
+    return (
+        comida_codigo in COMIDAS
+        and _persona_tiene_invitados_ilimitados_almuerzo(persona)
+    )
+
+
+def _ensure_default_empresa() -> Empresa:
+    codigo = _default_empresa_codigo()
+    empresa, _ = Empresa.objects.get_or_create(
+        codigo=codigo,
+        defaults={"nombre": codigo, "activo": True},
+    )
+    if not empresa.activo:
+        empresa.activo = True
+        empresa.save(update_fields=["activo", "actualizado_en"])
+    return empresa
+
+
+def _resolve_empresa(*, empresa_codigo: str | None, totem_id: str | None) -> Empresa:
+    cleaned_empresa_codigo = normalizar_codigo_empresa(empresa_codigo or "")
+    cleaned_totem_id = str(totem_id or "").strip()
+    active_companies = list(Empresa.objects.filter(activo=True).order_by("codigo"))
+
+    if cleaned_empresa_codigo:
+        empresa = Empresa.objects.filter(codigo=cleaned_empresa_codigo, activo=True).first()
+        if not empresa:
+            raise DomainError(
+                "Empresa no configurada.",
+                details={"empresa_codigo": cleaned_empresa_codigo},
+            )
+        return empresa
+
+    if cleaned_totem_id:
+        totem = (
+            Totem.objects.select_related("empresa")
+            .filter(codigo=cleaned_totem_id, activo=True, empresa__activo=True)
+            .first()
+        )
+        if totem:
+            return totem.empresa
+
+        if len(active_companies) == 1:
+            empresa = active_companies[0]
+            Totem.objects.get_or_create(
+                codigo=cleaned_totem_id,
+                defaults={
+                    "nombre": cleaned_totem_id,
+                    "empresa": empresa,
+                    "activo": True,
+                },
+            )
+            return empresa
+
+    if len(active_companies) == 1:
+        return active_companies[0]
+    if len(active_companies) > 1:
+        raise DomainError(
+            "No se pudo determinar la empresa para el totem.",
+            details={
+                "totem_id": cleaned_totem_id or None,
+                "empresa_codigo": cleaned_empresa_codigo or None,
+            },
+        )
+
+    return _ensure_default_empresa()
 
 
 def _pool_default_stock(codigo: str) -> int:
@@ -151,13 +272,13 @@ def _parse_bool(value: Any, *, field_name: str) -> bool:
     )
 
 
-def _get_persona(dni: str, lock: bool = False) -> Persona:
-    query = Persona.objects.filter(dni=dni, activo=True)
+def _get_persona(*, empresa: Empresa, dni: str, lock: bool = False) -> Persona:
+    query = Persona.objects.filter(empresa=empresa, dni=dni, activo=True)
     if lock:
         query = query.select_for_update()
     persona = query.first()
     if not persona:
-        raise PersonaNoEncontradaError("No existe una persona activa con ese DNI.")
+        raise PersonaNoEncontradaError("No existe una persona activa con ese documento.")
     return persona
 
 
@@ -212,15 +333,19 @@ def _get_or_create_cupo_diario_lock(
         )
 
 
-def _get_or_create_pool_diario_lock(*, codigo: str, dia: date) -> PoolDiario:
+def _get_or_create_pool_diario_lock(
+    *, empresa: Empresa, codigo: str, dia: date
+) -> PoolDiario:
     try:
         return PoolDiario.objects.select_for_update().get(
+            empresa=empresa,
             codigo=codigo,
             dia=dia,
         )
     except PoolDiario.DoesNotExist:
         try:
             PoolDiario.objects.create(
+                empresa=empresa,
                 codigo=codigo,
                 dia=dia,
                 stock_total=_pool_default_stock(codigo),
@@ -229,6 +354,7 @@ def _get_or_create_pool_diario_lock(*, codigo: str, dia: date) -> PoolDiario:
         except IntegrityError:
             pass
         return PoolDiario.objects.select_for_update().get(
+            empresa=empresa,
             codigo=codigo,
             dia=dia,
         )
@@ -295,6 +421,7 @@ def _build_comidas_estado(*, persona: Persona, dia: date) -> list[ComidaEstado]:
     pools = {
         pool.codigo: pool
         for pool in PoolDiario.objects.filter(
+            empresa=persona.empresa,
             dia=dia,
             codigo__in=_required_voucher_codes(),
         )
@@ -306,6 +433,11 @@ def _build_comidas_estado(*, persona: Persona, dia: date) -> list[ComidaEstado]:
         invitado_codigo = INVITADO_POR_COMIDA[comida_codigo]
         comida_pool = pools.get(comida_codigo)
         invitados_pool = pools.get(invitado_codigo)
+        invitados_habilitados = _persona_puede_invitar_en_comida(
+            persona=persona,
+            comida_codigo=comida_codigo,
+        )
+        invitados_ilimitados = invitados_habilitados
 
         estados.append(
             ComidaEstado(
@@ -313,8 +445,16 @@ def _build_comidas_estado(*, persona: Persona, dia: date) -> list[ComidaEstado]:
                 etiqueta=labels.get(comida_codigo, comida_codigo.title()),
                 cupo_fijos_persona=vouchers[comida_codigo].cupo_por_dia,
                 usados_fijos_persona=cupos.get(comida_codigo, 0),
-                cupo_invitados_persona=vouchers[invitado_codigo].cupo_por_dia,
-                usados_invitados_persona=cupos.get(invitado_codigo, 0),
+                cupo_invitados_persona=(
+                    ALMUERZO_INVITADOS_ILIMITADOS_SOFT_MAX_UI
+                    if invitados_ilimitados
+                    else 0
+                ),
+                usados_invitados_persona=(
+                    cupos.get(invitado_codigo, 0) if invitados_habilitados else 0
+                ),
+                invitados_habilitados_persona=invitados_habilitados,
+                invitados_ilimitados_persona=invitados_ilimitados,
                 stock_fijos_total=(
                     comida_pool.stock_total
                     if comida_pool
@@ -322,23 +462,34 @@ def _build_comidas_estado(*, persona: Persona, dia: date) -> list[ComidaEstado]:
                 ),
                 stock_fijos_usados=comida_pool.usados if comida_pool else 0,
                 stock_invitados_total=(
-                    invitados_pool.stock_total
-                    if invitados_pool
-                    else _pool_default_stock(invitado_codigo)
+                    ALMUERZO_INVITADOS_ILIMITADOS_SOFT_MAX_UI
+                    if invitados_ilimitados
+                    else 0
                 ),
-                stock_invitados_usados=invitados_pool.usados if invitados_pool else 0,
+                stock_invitados_usados=(
+                    0
+                    if invitados_ilimitados or not invitados_habilitados
+                    else (invitados_pool.usados if invitados_pool else 0)
+                ),
             )
         )
     return estados
 
 
-def lookup_persona_cupos(*, dni: str, dia: date | None = None) -> dict[str, Any]:
+def lookup_persona_cupos(
+    *,
+    dni: str,
+    totem_id: str | None = None,
+    empresa_codigo: str | None = None,
+    dia: date | None = None,
+) -> dict[str, Any]:
     normalized_dni = normalizar_dni(dni)
     if not normalized_dni:
-        raise PersonaNoEncontradaError("Debe ingresar un DNI valido.")
+        raise PersonaNoEncontradaError("Debe ingresar un documento valido.")
 
     dia = dia or _hoy()
-    persona = _get_persona(normalized_dni, lock=False)
+    empresa = _resolve_empresa(empresa_codigo=empresa_codigo, totem_id=totem_id)
+    persona = _get_persona(empresa=empresa, dni=normalized_dni, lock=False)
     comidas = _build_comidas_estado(persona=persona, dia=dia)
 
     comidas_payload = [
@@ -356,10 +507,12 @@ def lookup_persona_cupos(*, dni: str, dia: date | None = None) -> dict[str, Any]
                 "stock_agotado": comida.stock_fijos_disponible == 0,
             },
             "invitados": {
+                "habilitado": comida.invitados_habilitados_persona,
                 "cupo_persona": comida.cupo_invitados_persona,
                 "usados_persona": comida.usados_invitados_persona,
                 "disponibles_persona": comida.disponibles_invitados_persona,
                 "agotado_persona": comida.disponibles_invitados_persona == 0,
+                "ilimitado": comida.invitados_ilimitados_persona,
                 "stock_total": comida.stock_invitados_total,
                 "stock_usados": comida.stock_invitados_usados,
                 "stock_disponible": comida.stock_invitados_disponible,
@@ -384,6 +537,7 @@ def lookup_persona_cupos(*, dni: str, dia: date | None = None) -> dict[str, Any]
 
     return {
         "dia": dia.isoformat(),
+        "empresa": {"codigo": empresa.codigo, "nombre": empresa.nombre},
         "persona": {
             "dni": persona.dni,
             "nombre_apellido": persona.nombre_apellido,
@@ -483,9 +637,20 @@ def _redeem_comida_locked(
     totem_id: str,
     dia: date,
 ) -> list[Ticket]:
+    empresa = persona.empresa
     invitado_codigo = INVITADO_POR_COMIDA[comida_codigo]
     voucher_fijo = voucher_map[comida_codigo]
     voucher_invitado = voucher_map[invitado_codigo]
+    invitados_habilitados = _persona_puede_invitar_en_comida(
+        persona=persona,
+        comida_codigo=comida_codigo,
+    )
+    invitados_ilimitados_persona = invitados_habilitados
+
+    if invitados > 0 and not invitados_habilitados:
+        raise CantidadInvalidaError(
+            f"Esta persona no tiene habilitado el canje de invitados para {comida_codigo}."
+        )
 
     if not canjear_propio and invitados == 0:
         raise CantidadInvalidaError(
@@ -511,7 +676,11 @@ def _redeem_comida_locked(
                 },
             )
 
-        pool_fijo = _get_or_create_pool_diario_lock(codigo=comida_codigo, dia=dia)
+        pool_fijo = _get_or_create_pool_diario_lock(
+            empresa=empresa,
+            codigo=comida_codigo,
+            dia=dia,
+        )
         if pool_fijo.usados + 1 > pool_fijo.stock_total:
             raise StockAgotadoError(
                 f"Stock agotado para {comida_codigo}.",
@@ -532,33 +701,38 @@ def _redeem_comida_locked(
             voucher_tipo=voucher_invitado,
             dia=dia,
         )
-        invitados_persona_disponibles = voucher_invitado.cupo_por_dia - cupo_invitado.usados
-        if invitados > invitados_persona_disponibles:
-            raise CupoAgotadoError(
-                f"Cupo de invitados agotado para {comida_codigo}.",
-                details={
-                    "tipo": "invitados_persona",
-                    "codigo": comida_codigo,
-                    "cupo_por_dia": voucher_invitado.cupo_por_dia,
-                    "usados": cupo_invitado.usados,
-                    "solicitados": invitados,
-                    "disponibles": max(invitados_persona_disponibles, 0),
-                },
-            )
+        if not invitados_ilimitados_persona:
+            invitados_persona_disponibles = voucher_invitado.cupo_por_dia - cupo_invitado.usados
+            if invitados > invitados_persona_disponibles:
+                raise CupoAgotadoError(
+                    f"Cupo de invitados agotado para {comida_codigo}.",
+                    details={
+                        "tipo": "invitados_persona",
+                        "codigo": comida_codigo,
+                        "cupo_por_dia": voucher_invitado.cupo_por_dia,
+                        "usados": cupo_invitado.usados,
+                        "solicitados": invitados,
+                        "disponibles": max(invitados_persona_disponibles, 0),
+                    },
+                )
 
-        pool_invitado = _get_or_create_pool_diario_lock(codigo=invitado_codigo, dia=dia)
-        if pool_invitado.usados + invitados > pool_invitado.stock_total:
-            raise StockAgotadoError(
-                f"Stock de invitados agotado para {comida_codigo}.",
-                details={
-                    "tipo": "pool_invitados",
-                    "codigo": comida_codigo,
-                    "stock_total": pool_invitado.stock_total,
-                    "usados": pool_invitado.usados,
-                    "solicitados": invitados,
-                    "disponibles": max(pool_invitado.stock_total - pool_invitado.usados, 0),
-                },
+            pool_invitado = _get_or_create_pool_diario_lock(
+                empresa=empresa,
+                codigo=invitado_codigo,
+                dia=dia,
             )
+            if pool_invitado.usados + invitados > pool_invitado.stock_total:
+                raise StockAgotadoError(
+                    f"Stock de invitados agotado para {comida_codigo}.",
+                    details={
+                        "tipo": "pool_invitados",
+                        "codigo": comida_codigo,
+                        "stock_total": pool_invitado.stock_total,
+                        "usados": pool_invitado.usados,
+                        "solicitados": invitados,
+                        "disponibles": max(pool_invitado.stock_total - pool_invitado.usados, 0),
+                    },
+                )
 
     tickets: list[Ticket] = []
     if canjear_propio and cupo_fijo and pool_fijo:
@@ -595,6 +769,20 @@ def _redeem_comida_locked(
                     totem_id=totem_id,
                 )
             )
+    elif invitados > 0 and cupo_invitado and invitados_ilimitados_persona:
+        cupo_invitado.usados += invitados
+        cupo_invitado.save(update_fields=["usados", "actualizado_en"])
+
+        for _ in range(invitados):
+            tickets.append(
+                _create_ticket_with_retries(
+                    persona=persona,
+                    voucher_tipo=voucher_invitado,
+                    operacion=operacion,
+                    dia=dia,
+                    totem_id=totem_id,
+                )
+            )
 
     return tickets
 
@@ -604,11 +792,12 @@ def redeem_vouchers_batch(
     dni: str,
     items: list[dict[str, Any]],
     totem_id: str,
+    empresa_codigo: str | None = None,
     dia: date | None = None,
 ) -> list[Ticket]:
     normalized_dni = normalizar_dni(dni)
     if not normalized_dni:
-        raise PersonaNoEncontradaError("Debe ingresar un DNI valido.")
+        raise PersonaNoEncontradaError("Debe ingresar un documento valido.")
 
     dia = dia or _hoy()
     normalized_items = normalizar_redeem_batch_items(items)
@@ -618,7 +807,8 @@ def redeem_vouchers_batch(
     voucher_map = _load_required_vouchers()
 
     with transaction.atomic():
-        persona = _get_persona(normalized_dni, lock=True)
+        empresa = _resolve_empresa(empresa_codigo=empresa_codigo, totem_id=totem_id)
+        persona = _get_persona(empresa=empresa, dni=normalized_dni, lock=True)
         operacion = CanjeOperacion.objects.create(
             persona=persona,
             dia=dia,
@@ -661,6 +851,7 @@ def redeem_voucher(
     dni: str,
     voucher_codigo: str,
     totem_id: str,
+    empresa_codigo: str | None = None,
     dia: date | None = None,
 ) -> Ticket:
     voucher_codigo = str(voucher_codigo).upper().strip()
@@ -673,14 +864,33 @@ def redeem_voucher(
         dni=dni,
         items=[{"comida": voucher_codigo, "canjear_propio": True, "invitados": 0}],
         totem_id=totem_id,
+        empresa_codigo=empresa_codigo,
         dia=dia,
     )
     return tickets[0]
 
 
-def reporte_tickets_diario(*, dia: date | None = None) -> dict[str, Any]:
+def _resolve_empresa_filter(empresa_codigo: str | None) -> Empresa | None:
+    normalized = normalizar_codigo_empresa(empresa_codigo or "")
+    if not normalized:
+        return None
+    empresa = Empresa.objects.filter(codigo=normalized).first()
+    if not empresa:
+        raise DomainError("Empresa no configurada.", details={"empresa_codigo": normalized})
+    return empresa
+
+
+def reporte_tickets_diario(
+    *,
+    dia: date | None = None,
+    empresa_codigo: str | None = None,
+) -> dict[str, Any]:
     dia = dia or _hoy()
+    empresa = _resolve_empresa_filter(empresa_codigo)
+
     base_qs = Ticket.objects.filter(dia=dia)
+    if empresa:
+        base_qs = base_qs.filter(persona__empresa=empresa)
 
     by_voucher = list(
         base_qs.values("voucher_tipo__codigo")
@@ -705,13 +915,24 @@ def reporte_tickets_diario(*, dia: date | None = None) -> dict[str, Any]:
         .order_by("-total", "persona__dni")[:10]
     )
     pools = list(
-        PoolDiario.objects.filter(dia=dia)
+        PoolDiario.objects.filter(
+            dia=dia,
+            **({"empresa": empresa} if empresa else {}),
+        )
         .values("codigo", "stock_total", "usados")
         .order_by("codigo")
     )
 
     return {
         "dia": dia.isoformat(),
+        "empresa": (
+            {
+                "codigo": empresa.codigo,
+                "nombre": empresa.nombre,
+            }
+            if empresa
+            else None
+        ),
         "total_tickets": base_qs.count(),
         "por_voucher": [
             {"voucher": row["voucher_tipo__codigo"], "total": row["total"]}
@@ -745,6 +966,7 @@ def reporte_operaciones_canje(
     fecha_hasta: date | None = None,
     dni: str | None = None,
     totem_id: str | None = None,
+    empresa_codigo: str | None = None,
     limit: int = 500,
 ) -> dict[str, Any]:
     fecha_desde = fecha_desde or _hoy()
@@ -755,16 +977,20 @@ def reporte_operaciones_canje(
     if limit < 1 or limit > 5000:
         raise DomainError("El parametro limit debe estar entre 1 y 5000.")
 
+    empresa = _resolve_empresa_filter(empresa_codigo)
+
     qs = (
-        CanjeOperacion.objects.select_related("persona")
+        CanjeOperacion.objects.select_related("persona__empresa")
         .prefetch_related("items", "tickets__voucher_tipo")
         .filter(dia__gte=fecha_desde, dia__lte=fecha_hasta)
         .order_by("-creado_en", "-id")
     )
+    if empresa:
+        qs = qs.filter(persona__empresa=empresa)
 
     normalized_dni = normalizar_dni(dni or "")
     if dni and not normalized_dni:
-        raise DomainError("El filtro DNI es invalido.")
+        raise DomainError("El filtro documento es invalido.")
     if normalized_dni:
         qs = qs.filter(persona__dni=normalized_dni)
 
@@ -817,6 +1043,8 @@ def reporte_operaciones_canje(
                 "creado_en": operacion.creado_en.isoformat(),
                 "totem_id": operacion.totem_id,
                 "persona": {
+                    "empresa_codigo": operacion.persona.empresa.codigo,
+                    "empresa_nombre": operacion.persona.empresa.nombre,
                     "dni": operacion.persona.dni,
                     "nombre_apellido": operacion.persona.nombre_apellido,
                     "concesionario": operacion.persona.concesionario,
@@ -841,6 +1069,7 @@ def reporte_operaciones_canje(
         "filtros": {
             "dni": normalized_dni or None,
             "totem_id": cleaned_totem_id or None,
+            "empresa_codigo": empresa.codigo if empresa else None,
             "limit": limit,
         },
         "total_operaciones": len(payload_operaciones),

@@ -4,8 +4,46 @@ from django.db.models import CheckConstraint, Q, UniqueConstraint
 from django.utils import timezone
 
 
+class Empresa(models.Model):
+    codigo = models.CharField(max_length=30, unique=True, db_index=True)
+    nombre = models.CharField(max_length=120)
+    activo = models.BooleanField(default=True)
+    creado_en = models.DateTimeField(default=timezone.now, editable=False)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["codigo"]
+
+    def __str__(self) -> str:
+        return f"{self.codigo} - {self.nombre}"
+
+
+class Totem(models.Model):
+    codigo = models.CharField(max_length=50, unique=True, db_index=True)
+    nombre = models.CharField(max_length=120, blank=True, default="")
+    empresa = models.ForeignKey(
+        Empresa,
+        on_delete=models.PROTECT,
+        related_name="totems",
+    )
+    activo = models.BooleanField(default=True)
+    creado_en = models.DateTimeField(default=timezone.now, editable=False)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["codigo"]
+
+    def __str__(self) -> str:
+        return f"{self.codigo} ({self.empresa.codigo})"
+
+
 class Persona(models.Model):
-    dni = models.CharField(max_length=12, unique=True, db_index=True)
+    empresa = models.ForeignKey(
+        Empresa,
+        on_delete=models.PROTECT,
+        related_name="personas",
+    )
+    dni = models.CharField(max_length=12, db_index=True)
     nombre_apellido = models.CharField(max_length=120)
     concesionario = models.CharField(max_length=120, blank=True, default="")
     credencial = models.CharField(max_length=50, blank=True, default="")
@@ -14,10 +52,16 @@ class Persona(models.Model):
     actualizado_en = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["dni"]
+        ordering = ["empresa_id", "dni"]
+        constraints = [
+            UniqueConstraint(fields=["empresa", "dni"], name="uq_persona_empresa_dni"),
+        ]
+        indexes = [
+            models.Index(fields=["empresa", "dni"], name="idx_persona_empresa_dni"),
+        ]
 
     def __str__(self) -> str:
-        return f"{self.dni} - {self.nombre_apellido}"
+        return f"{self.empresa.codigo} {self.dni} - {self.nombre_apellido}"
 
 
 class VoucherTipo(models.Model):
@@ -177,6 +221,11 @@ class PoolDiario(models.Model):
         (VoucherTipo.INVITADO_ALMUERZO, "Pool invitados almuerzo"),
     ]
 
+    empresa = models.ForeignKey(
+        Empresa,
+        on_delete=models.PROTECT,
+        related_name="pools_diarios",
+    )
     codigo = models.CharField(max_length=24, choices=CODIGOS)
     dia = models.DateField()
     stock_total = models.PositiveIntegerField(validators=[MinValueValidator(1)])
@@ -184,15 +233,18 @@ class PoolDiario(models.Model):
     actualizado_en = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["-dia", "codigo"]
+        ordering = ["-dia", "empresa_id", "codigo"]
         constraints = [
-            UniqueConstraint(fields=["dia", "codigo"], name="uq_pool_diario_dia_codigo"),
+            UniqueConstraint(
+                fields=["empresa", "dia", "codigo"],
+                name="uq_pool_diario_empresa_dia_codigo",
+            ),
             CheckConstraint(condition=Q(stock_total__gte=1), name="ck_pool_diario_stock_gte_1"),
             CheckConstraint(condition=Q(usados__gte=0), name="ck_pool_diario_usados_gte_0"),
         ]
         indexes = [
-            models.Index(fields=["dia", "codigo"], name="idx_pool_diario_dia_codigo"),
+            models.Index(fields=["empresa", "dia", "codigo"], name="idx_pool_diario_emp_dia_codigo"),
         ]
 
     def __str__(self) -> str:
-        return f"{self.codigo} {self.dia} {self.usados}/{self.stock_total}"
+        return f"{self.empresa.codigo} {self.codigo} {self.dia} {self.usados}/{self.stock_total}"
