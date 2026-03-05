@@ -11,7 +11,7 @@
   const totemId = screen.dataset.totemId || "";
   const empresaCodigo = screen.dataset.empresaCodigo || "";
   const PRINTING_WAIT_MESSAGE = "Por favor, aguarde que se impriman todos sus vouchers";
-  const PRINTING_MIN_VISIBLE_MS = 20000;
+  const PRINTING_MIN_VISIBLE_MS = 5000;
   const UNLIMITED_GUEST_SOFT_MAX = 999;
   const RAWBT_BATCH_SIZE = 3;
   const RAWBT_BATCH_DELAY_MS = 220;

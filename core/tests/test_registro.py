@@ -25,7 +25,7 @@ class RegistroPersonasTests(TestCase):
                 "dni": "ab-123456",
                 "nombre_apellido": "Katherine Johnson",
                 "concesionario": "Demo",
-                "credencial": "INV",
+                "credencial": "AGCO",
                 "tipo_vianda": "VEGETARIANO",
                 "puede_invitar": "on",
                 "activo": "on",
