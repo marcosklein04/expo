@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 from uuid import uuid4
-
 from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import Count
@@ -77,6 +76,16 @@ class CupoAgotadoError(DomainError):
 class StockAgotadoError(DomainError):
     code = "stock_exhausted"
     http_status = 409
+
+
+class PinSoporteInvalidoError(DomainError):
+    code = "invalid_support_pin"
+    http_status = 403
+
+
+class ReimpresionNoDisponibleError(DomainError):
+    code = "reprint_not_available"
+    http_status = 404
 
 
 @dataclass(frozen=True)
@@ -156,6 +165,12 @@ def _massey_totem_id() -> str:
     return raw or "TOTEM-MASSEY"
 
 
+def _support_reprint_pin() -> str:
+    raw = str(getattr(settings, "SUPPORT_REPRINT_PIN", "4832")).strip()
+    digits_only = "".join(ch for ch in raw if ch.isdigit())
+    return digits_only or "4832"
+
+
 def _normalizar_credencial(raw_credencial: str) -> str:
     return "".join(ch for ch in normalizar_texto(raw_credencial) if ch.isalnum())
 
@@ -179,6 +194,12 @@ def _validar_persona_habilitada_para_totem(*, persona: Persona, totem_id: str) -
             "credencial": persona.credencial,
         },
     )
+
+
+def _validar_pin_soporte(pin: str) -> None:
+    normalized_pin = "".join(ch for ch in str(pin or "").strip() if ch.isdigit())
+    if normalized_pin != _support_reprint_pin():
+        raise PinSoporteInvalidoError("PIN de soporte inválido.")
 
 
 def _persona_puede_invitar_en_comida(*, persona: Persona, comida_codigo: str) -> bool:
@@ -899,6 +920,64 @@ def redeem_voucher(
         dia=dia,
     )
     return tickets[0]
+
+
+def obtener_tickets_ultimo_canje(
+    *,
+    dni: str,
+    pin: str,
+    totem_id: str,
+    empresa_codigo: str | None = None,
+    dia: date | None = None,
+) -> list[Ticket]:
+    normalized_dni = normalizar_dni(dni)
+    if not normalized_dni:
+        raise PersonaNoEncontradaError("Debe ingresar un documento válido.")
+
+    _validar_pin_soporte(pin)
+
+    cleaned_totem_id = str(totem_id or "").strip() or str(settings.DEFAULT_TOTEM_ID).strip()
+    if not cleaned_totem_id:
+        cleaned_totem_id = "TOTEM-01"
+
+    dia = dia or _hoy()
+    empresa = _resolve_empresa(empresa_codigo=empresa_codigo, totem_id=cleaned_totem_id)
+    persona = _get_persona(empresa=empresa, dni=normalized_dni, lock=False)
+    _validar_persona_habilitada_para_totem(persona=persona, totem_id=cleaned_totem_id)
+
+    operacion = (
+        CanjeOperacion.objects.filter(
+            persona=persona,
+            dia=dia,
+            totem_id=cleaned_totem_id,
+        )
+        .order_by("-creado_en", "-id")
+        .first()
+    )
+    if not operacion:
+        raise ReimpresionNoDisponibleError(
+            "No hay tickets del día para reimprimir en este tótem."
+        )
+
+    tickets = list(
+        Ticket.objects.filter(operacion=operacion)
+        .select_related("persona", "voucher_tipo")
+        .order_by("creado_en", "id")
+    )
+    if not tickets:
+        raise ReimpresionNoDisponibleError(
+            "No hay tickets para reimprimir en la última operación."
+        )
+
+    audit_logger.info(
+        "support_reprint_ready operacion_id=%s dni=%s dia=%s totem=%s cantidad_tickets=%s",
+        operacion.id,
+        normalized_dni,
+        dia.isoformat(),
+        cleaned_totem_id,
+        len(tickets),
+    )
+    return tickets
 
 
 def _resolve_empresa_filter(empresa_codigo: str | None) -> Empresa | None:

@@ -18,6 +18,7 @@ Aplicacion de kiosco para emision de vouchers con control diario por persona/vou
 - `POST /api/lookup`
 - `POST /api/redeem`
 - `POST /api/redeem-batch`
+- `POST /api/reprint-last` (reimpresion de ultima operacion del dia con PIN de soporte)
 - `GET /api/reports/daily?dia=YYYY-MM-DD&empresa_codigo=`
 - `GET /api/reports/redeems?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&dni=&totem_id=&empresa_codigo=&limit=500`
 - `GET /api/reports/redeems.csv?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&dni=&totem_id=&empresa_codigo=&limit=2000`
@@ -91,6 +92,7 @@ export MYSQL_PASSWORD=CHANGE_ME_STRONG_PASSWORD
 export MYSQL_HOST=127.0.0.1
 export MYSQL_PORT=3307
 export DEFAULT_EMPRESA_CODE=DEFAULT
+export SUPPORT_REPRINT_PIN=4832
 export POOL_STOCK_FIJOS_DESAYUNO=120
 export POOL_STOCK_FIJOS_ALMUERZO=120
 export POOL_STOCK_INVITADOS_DESAYUNO=120
@@ -148,6 +150,7 @@ Registro de empresas/totems:
 
 - El flujo principal de impresion en totem Android usa **RawBT** via intent (`rawbt://`), igual que `turneraOnline`.
 - `Finalizar e imprimir` genera tickets en backend y el frontend dispara automaticamente el intent con ESC/POS.
+- En la pantalla de vouchers hay flujo de soporte para reimpresion de la ultima operacion del dia (misma persona + mismo totem), protegido por PIN (`SUPPORT_REPRINT_PIN`).
 - En la pantalla inicial, la primera vez por sesion se envia `test` a RawBT para inicializar la conexion (mismo criterio que `turneraOnline`).
 - Si el dispositivo no es Android (o para pruebas), cae a impresion de navegador (`window.print()`).
 - Para forzar modo navegador manualmente usar: `/kiosk/vouchers/?dni=...&print_mode=browser`

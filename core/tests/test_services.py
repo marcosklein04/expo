@@ -18,9 +18,11 @@ from core.models import (
 from core.services import (
     CantidadInvalidaError,
     CupoAgotadoError,
+    PinSoporteInvalidoError,
     PersonaNoEncontradaError,
     StockAgotadoError,
     lookup_persona_cupos,
+    obtener_tickets_ultimo_canje,
     reporte_operaciones_canje,
     redeem_voucher,
     redeem_vouchers_batch,
@@ -453,6 +455,50 @@ class VoucherServiceTests(TestCase):
                 dni=persona_b.dni,
                 voucher_codigo=VoucherTipo.DESAYUNO,
                 totem_id="TOTEM-B",
+            )
+
+    def test_obtener_tickets_ultimo_canje_retorna_tickets_de_la_ultima_operacion(self):
+        tickets_emitidos = redeem_vouchers_batch(
+            dni=self.persona_autorizada.dni,
+            totem_id="TOTEM-77",
+            items=[
+                {
+                    "comida": VoucherTipo.ALMUERZO,
+                    "canjear_propio": True,
+                    "invitados": 2,
+                }
+            ],
+        )
+
+        tickets = obtener_tickets_ultimo_canje(
+            dni=self.persona_autorizada.dni,
+            pin="4832",
+            totem_id="TOTEM-77",
+        )
+        self.assertEqual(len(tickets), 3)
+        self.assertEqual(
+            {ticket.ticket_numero for ticket in tickets},
+            {ticket.ticket_numero for ticket in tickets_emitidos},
+        )
+
+    def test_obtener_tickets_ultimo_canje_rechaza_pin_invalido(self):
+        redeem_vouchers_batch(
+            dni=self.persona_autorizada.dni,
+            totem_id="TOTEM-77",
+            items=[
+                {
+                    "comida": VoucherTipo.DESAYUNO,
+                    "canjear_propio": True,
+                    "invitados": 0,
+                }
+            ],
+        )
+
+        with self.assertRaises(PinSoporteInvalidoError):
+            obtener_tickets_ultimo_canje(
+                dni=self.persona_autorizada.dni,
+                pin="0000",
+                totem_id="TOTEM-77",
             )
 
 

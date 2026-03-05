@@ -5,9 +5,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Vouchers disponibles</title>
-  <link rel="stylesheet" href="{% static 'style/style.css' %}?v=20260305-2">
-  <script src="{% static 'js/print.js' %}?v=20260305-2" defer></script>
-  <script src="{% static 'js/kiosk/vouchers.js' %}?v=20260305-2" defer></script>
+  <link rel="stylesheet" href="{% static 'style/style.css' %}?v=20260305-3">
+  <script src="{% static 'js/print.js' %}?v=20260305-3" defer></script>
+  <script src="{% static 'js/kiosk/vouchers.js' %}?v=20260305-3" defer></script>
 </head>
 <body class="page-vouchers brand-{{ brand.slug }}">
   <main
@@ -17,6 +17,7 @@
     data-start-url="{{ urls.start }}"
     data-dni-url="{{ urls.dni }}"
     data-redeem-url="{% url 'api:redeem_batch' %}"
+    data-reprint-url="{% url 'api:reprint_last' %}"
     data-totem-id="{{ totem_id|default:'' }}"
     data-empresa-codigo="{{ empresa.codigo|default:empresa_codigo|default:'' }}"
     data-persona-dni="{{ persona.dni|default:'' }}"
@@ -102,6 +103,31 @@
         <button class="kiosk-button" id="finalize-selection" disabled>Finalizar e imprimir</button>
         <button class="kiosk-button secondary" id="clear-selection" disabled>Limpiar selección</button>
         <button class="kiosk-button secondary" data-go-dni>Otro DNI</button>
+      </section>
+
+      <section class="support-reprint">
+        <p class="support-reprint-text">
+          Si su voucher no se imprimió, llame a una persona de soporte.
+        </p>
+        <button type="button" class="kiosk-button secondary" id="support-open">
+          Soporte: reimprimir ticket
+        </button>
+        <div class="support-reprint-panel hidden" id="support-panel">
+          <label class="support-pin-label" for="support-pin">PIN de soporte</label>
+          <input
+            id="support-pin"
+            class="support-pin-input"
+            type="password"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            maxlength="4"
+            autocomplete="off"
+            placeholder="••••"
+          >
+          <button type="button" class="kiosk-button" id="support-reprint-btn">
+            Imprimir ticket
+          </button>
+        </div>
       </section>
     {% else %}
       <div class="error-box">No hay comidas habilitadas para mostrar.</div>

@@ -11,6 +11,7 @@ from django.views.decorators.http import require_GET, require_POST
 from core.services import (
     DomainError,
     lookup_persona_cupos,
+    obtener_tickets_ultimo_canje,
     reporte_operaciones_canje,
     redeem_voucher,
     redeem_vouchers_batch,
@@ -130,6 +131,34 @@ def redeem_batch(request):
                 "total_tickets": len(tickets),
             },
             status=201,
+        )
+    except DomainError as exc:
+        return _error_response(exc)
+
+
+@require_POST
+def reprint_last(request):
+    try:
+        payload = _json_body(request)
+        dni = str(payload.get("dni", ""))
+        pin = str(payload.get("pin", ""))
+        totem_id = str(payload.get("totem_id") or settings.DEFAULT_TOTEM_ID).strip()
+        empresa_codigo = str(payload.get("empresa_codigo", "")).strip() or None
+
+        tickets = obtener_tickets_ultimo_canje(
+            dni=dni,
+            pin=pin,
+            totem_id=totem_id,
+            empresa_codigo=empresa_codigo,
+        )
+        return JsonResponse(
+            {
+                "ok": True,
+                "tickets": [_serialize_ticket(ticket) for ticket in tickets],
+                "total_tickets": len(tickets),
+                "operacion_id": tickets[0].operacion_id,
+            },
+            status=200,
         )
     except DomainError as exc:
         return _error_response(exc)

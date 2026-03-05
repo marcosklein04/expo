@@ -172,6 +172,72 @@ class ApiTests(TestCase):
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["error"]["code"], "invalid_quantity")
 
+    def test_reprint_last_ok_with_pin(self):
+        redeem_response = self.client.post(
+            "/api/redeem-batch",
+            data=json.dumps(
+                {
+                    "dni": self.persona_autorizada.dni,
+                    "totem_id": "TOTEM-01",
+                    "items": [
+                        {
+                            "comida": VoucherTipo.DESAYUNO,
+                            "canjear_propio": True,
+                            "invitados": 1,
+                        }
+                    ],
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(redeem_response.status_code, 201)
+
+        response = self.client.post(
+            "/api/reprint-last",
+            data=json.dumps(
+                {
+                    "dni": self.persona_autorizada.dni,
+                    "totem_id": "TOTEM-01",
+                    "pin": "4832",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["total_tickets"], 2)
+        self.assertEqual(len(payload["tickets"]), 2)
+
+    def test_reprint_last_rejects_invalid_pin(self):
+        self.client.post(
+            "/api/redeem-batch",
+            data=json.dumps(
+                {
+                    "dni": self.persona_autorizada.dni,
+                    "totem_id": "TOTEM-01",
+                    "items": [{"comida": VoucherTipo.DESAYUNO, "canjear_propio": True}],
+                }
+            ),
+            content_type="application/json",
+        )
+
+        response = self.client.post(
+            "/api/reprint-last",
+            data=json.dumps(
+                {
+                    "dni": self.persona_autorizada.dni,
+                    "totem_id": "TOTEM-01",
+                    "pin": "0000",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 403)
+        payload = response.json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error"]["code"], "invalid_support_pin")
+
     def test_report_daily_ok(self):
         self.client.post(
             "/api/redeem",

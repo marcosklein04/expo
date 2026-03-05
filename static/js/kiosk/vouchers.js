@@ -8,10 +8,13 @@
   const startUrl = screen.dataset.startUrl || "/";
   const dniUrl = screen.dataset.dniUrl || "/";
   const redeemUrl = screen.dataset.redeemUrl || "";
+  const reprintUrl = screen.dataset.reprintUrl || "";
   const totemId = screen.dataset.totemId || "";
   const empresaCodigo = screen.dataset.empresaCodigo || "";
   const PRINTING_WAIT_MESSAGE = "Por favor, aguarde que se impriman todos sus vouchers";
+  const SUPPORT_REPRINT_WAIT_MESSAGE = "Reimprimiendo vouchers";
   const PRINTING_MIN_VISIBLE_MS = 5000;
+  const SUPPORT_PIN_LENGTH = 4;
   const UNLIMITED_GUEST_SOFT_MAX = 999;
   const RAWBT_BATCH_SIZE = 3;
   const RAWBT_BATCH_DELAY_MS = 220;
@@ -35,6 +38,10 @@
   const reprintLastBtn = document.getElementById("reprint-last");
   const finalizeBtn = document.getElementById("finalize-selection");
   const clearBtn = document.getElementById("clear-selection");
+  const supportOpenBtn = document.getElementById("support-open");
+  const supportPanel = document.getElementById("support-panel");
+  const supportPinInput = document.getElementById("support-pin");
+  const supportReprintBtn = document.getElementById("support-reprint-btn");
 
   const mealCards = Array.from(document.querySelectorAll("[data-meal-card]"));
   const ownByMeal = new Map();
@@ -79,6 +86,12 @@
       return parts.pop().split(";").shift();
     }
     return "";
+  }
+
+  function sanitizeSupportPin(rawValue) {
+    return String(rawValue || "")
+      .replace(/\D/g, "")
+      .slice(0, SUPPORT_PIN_LENGTH);
   }
 
   function toNumber(value) {
@@ -279,6 +292,18 @@
     }
   }
 
+  function updateSupportUi() {
+    if (supportOpenBtn) {
+      supportOpenBtn.disabled = processing;
+    }
+    if (supportPinInput) {
+      supportPinInput.disabled = processing;
+    }
+    if (supportReprintBtn) {
+      supportReprintBtn.disabled = processing;
+    }
+  }
+
   function clearSelection() {
     mealCards.forEach((card) => {
       setOwnSelected(card, false);
@@ -462,6 +487,34 @@
     return data;
   }
 
+  async function requestSupportReprint(pin) {
+    const response = await fetch(reprintUrl, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": getCookie("csrftoken"),
+      },
+      body: JSON.stringify({
+        dni: personaPrintData.dni,
+        pin,
+        totem_id: totemId,
+        empresa_codigo: empresaCodigo || undefined,
+      }),
+    });
+
+    let data = {};
+    try {
+      data = await response.json();
+    } catch (error) {
+      data = {};
+    }
+    if (!response.ok || !data.ok) {
+      throw new Error(data?.error?.message || "No se pudo reimprimir la última operación.");
+    }
+    return data;
+  }
+
   async function printTickets(tickets) {
     if (preferRawBt) {
       const payloads = tickets.map((ticket) => buildRawBtTicketPayload(ticket)).filter(Boolean);
@@ -529,6 +582,7 @@
     showFlow(PRINTING_WAIT_MESSAGE);
     mealCards.forEach((card) => updateCardUI(card));
     updateSelectionInfo();
+    updateSupportUi();
 
     try {
       const data = await redeemBatch(items);
@@ -554,6 +608,62 @@
       processing = false;
       mealCards.forEach((card) => updateCardUI(card));
       updateSelectionInfo();
+      updateSupportUi();
+    }
+  }
+
+  async function supportReprintLastOperation() {
+    if (processing) {
+      return;
+    }
+    if (!reprintUrl) {
+      setNotice("No se configuró el endpoint de reimpresión.");
+      return;
+    }
+    const pin = sanitizeSupportPin(supportPinInput?.value || "");
+    if (pin.length !== SUPPORT_PIN_LENGTH) {
+      setNotice(`Ingresá el PIN de soporte de ${SUPPORT_PIN_LENGTH} dígitos.`);
+      if (supportPinInput) {
+        supportPinInput.focus();
+      }
+      return;
+    }
+
+    processing = true;
+    setNotice("Validando PIN de soporte...");
+    const flowStartedAt = Date.now();
+    showFlow(SUPPORT_REPRINT_WAIT_MESSAGE);
+    mealCards.forEach((card) => updateCardUI(card));
+    updateSelectionInfo();
+    updateSupportUi();
+
+    try {
+      const data = await requestSupportReprint(pin);
+      await printTickets(data.tickets || []);
+      const flowElapsed = Date.now() - flowStartedAt;
+      const remainingFlow = Math.max(PRINTING_MIN_VISIBLE_MS - flowElapsed, 0);
+      if (remainingFlow > 0) {
+        await sleep(remainingFlow);
+      }
+
+      if (supportPinInput) {
+        supportPinInput.value = "";
+      }
+      if (supportPanel) {
+        supportPanel.classList.add("hidden");
+      }
+
+      const total = Number(data.total_tickets || 0);
+      setNotice(`${total} ticket(s) reimpreso(s).`);
+      showFlow("");
+    } catch (error) {
+      showFlow("");
+      setNotice(error.message || "No se pudo reimprimir la última operación.");
+    } finally {
+      processing = false;
+      mealCards.forEach((card) => updateCardUI(card));
+      updateSelectionInfo();
+      updateSupportUi();
     }
   }
 
@@ -571,6 +681,25 @@
 
   if (finalizeBtn) {
     finalizeBtn.addEventListener("click", finalizeSelection);
+  }
+
+  if (supportOpenBtn && supportPanel) {
+    supportOpenBtn.addEventListener("click", () => {
+      supportPanel.classList.toggle("hidden");
+      if (!supportPanel.classList.contains("hidden") && supportPinInput) {
+        supportPinInput.focus();
+      }
+    });
+  }
+
+  if (supportPinInput) {
+    supportPinInput.addEventListener("input", () => {
+      supportPinInput.value = sanitizeSupportPin(supportPinInput.value);
+    });
+  }
+
+  if (supportReprintBtn) {
+    supportReprintBtn.addEventListener("click", supportReprintLastOperation);
   }
 
   if (!mealCards.length || !redeemUrl || !personaPrintData.dni) {
@@ -608,5 +737,6 @@
   });
 
   updateSelectionInfo();
+  updateSupportUi();
   resetIdle();
 })();
