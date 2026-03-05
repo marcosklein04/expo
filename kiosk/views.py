@@ -32,9 +32,12 @@ def vouchers_screen(request):
     if not document:
         return redirect("kiosk:dni")
 
+    empresa_codigo = str(getattr(settings, "DEFAULT_EMPRESA_CODE", "")).strip() or None
+
     context = {
         "idle_seconds": settings.KIOSK_IDLE_SECONDS,
         "totem_id": settings.DEFAULT_TOTEM_ID,
+        "empresa_codigo": empresa_codigo or "",
         "error": None,
         "persona": None,
         "comidas": [],
@@ -46,6 +49,7 @@ def vouchers_screen(request):
         data = lookup_persona_cupos(
             dni=document,
             totem_id=settings.DEFAULT_TOTEM_ID,
+            empresa_codigo=empresa_codigo,
         )
         context.update(data)
     except DomainError as exc:

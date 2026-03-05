@@ -9,6 +9,7 @@
   const dniUrl = screen.dataset.dniUrl || "/";
   const redeemUrl = screen.dataset.redeemUrl || "";
   const totemId = screen.dataset.totemId || "";
+  const empresaCodigo = screen.dataset.empresaCodigo || "";
   const PRINTING_WAIT_MESSAGE = "Por favor, aguarde que se impriman todos sus vouchers";
   const PRINTING_MIN_VISIBLE_MS = 20000;
   const UNLIMITED_GUEST_SOFT_MAX = 999;
@@ -447,6 +448,7 @@
       body: JSON.stringify({
         dni: personaPrintData.dni,
         totem_id: totemId,
+        empresa_codigo: empresaCodigo || undefined,
         items,
       }),
     });

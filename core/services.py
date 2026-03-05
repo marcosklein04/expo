@@ -175,6 +175,8 @@ def _resolve_empresa(*, empresa_codigo: str | None, totem_id: str | None) -> Emp
     if cleaned_empresa_codigo:
         empresa = Empresa.objects.filter(codigo=cleaned_empresa_codigo, activo=True).first()
         if not empresa:
+            if len(active_companies) == 1:
+                return active_companies[0]
             raise DomainError(
                 "Empresa no configurada.",
                 details={"empresa_codigo": cleaned_empresa_codigo},
@@ -268,7 +270,10 @@ def _get_persona(*, empresa: Empresa, dni: str, lock: bool = False) -> Persona:
         query = query.select_for_update()
     persona = query.first()
     if not persona:
-        raise PersonaNoEncontradaError("No existe una persona activa con ese documento.")
+        raise PersonaNoEncontradaError(
+            "No existe una persona activa con ese documento.",
+            details={"empresa_codigo": empresa.codigo, "documento": dni},
+        )
     return persona
 
 
