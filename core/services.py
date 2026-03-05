@@ -39,7 +39,7 @@ INVITADOS_AUTORIZADOS_FIJOS = {
 }
 MASSEY_CREDENCIALES_PERMITIDAS = {"AGCO"}
 MASSEY_ACCESS_DENIED_MESSAGE = (
-    "No se encuentra en esta base de datos, por favor dirigirse a otro tótem o vuelva a intentar."
+    "No se encuentra este nombre, diríjase hacia otro tótem."
 )
 
 

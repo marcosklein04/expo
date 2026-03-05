@@ -9,7 +9,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from core.services import DomainError, lookup_persona_cupos
 
 MASSEY_ACCESS_DENIED_MESSAGE = (
-    "No se encuentra en esta base de datos, por favor dirigirse a otro tótem o vuelva a intentar."
+    "No se encuentra este nombre, diríjase hacia otro tótem."
 )
 
 KIOSK_BRANDS: dict[str, dict[str, object]] = {
@@ -20,7 +20,7 @@ KIOSK_BRANDS: dict[str, dict[str, object]] = {
         "totem_default": "TOTEM-FENDT",
         "logos": [
             {
-                "src": "images/fendt-logo.svg",
+                "src": "images/fendt-logo-white.svg",
                 "alt": "Fendt",
                 "class_name": "brand-logo-fendt-only",
             }
@@ -46,7 +46,7 @@ KIOSK_BRANDS: dict[str, dict[str, object]] = {
         "totem_default": "TOTEM-MASSEY",
         "logos": [
             {
-                "src": "images/massey-logo.svg",
+                "src": "images/massey-logo-brand.png",
                 "alt": "Massey Ferguson",
                 "class_name": "brand-logo-massey",
             }
