@@ -9,13 +9,13 @@
   <script src="{% static 'js/print.js' %}" defer></script>
   <script src="{% static 'js/kiosk/vouchers.js' %}" defer></script>
 </head>
-<body class="page-vouchers">
+<body class="page-vouchers brand-{{ brand.slug }}">
   <main
     class="kiosk-shell"
     id="screen"
     data-idle-ms="{{ idle_seconds|default:0 }}000"
-    data-start-url="{% url 'kiosk:start' %}"
-    data-dni-url="{% url 'kiosk:dni' %}"
+    data-start-url="{{ urls.start }}"
+    data-dni-url="{{ urls.dni }}"
     data-redeem-url="{% url 'api:redeem_batch' %}"
     data-totem-id="{{ totem_id|default:'' }}"
     data-empresa-codigo="{{ empresa.codigo|default:empresa_codigo|default:'' }}"
@@ -25,9 +25,14 @@
     data-persona-concesionario="{{ persona.concesionario|default:'-' }}"
     data-persona-tipo-vianda="{{ persona.get_tipo_vianda_display|default:'-' }}"
   >
-    <div class="kiosk-brand" aria-label="Valtra Fendt">
-      <img class="brand-logo brand-logo-valtra" src="{% static 'images/valtra-logo.png' %}" alt="Valtra">
-      <img class="brand-logo brand-logo-fendt" src="{% static 'images/fendt-logo.svg' %}" alt="Fendt">
+    <div class="kiosk-brand" aria-label="{{ brand.nombre }}">
+      {% for logo in brand.logos %}
+        <img
+          class="brand-logo {{ logo.class_name }}"
+          src="{% static logo.src %}"
+          alt="{{ logo.alt }}"
+        >
+      {% endfor %}
     </div>
 
     {% if error %}
@@ -106,9 +111,14 @@
     {% endif %}
 
     <section class="flow-screen hidden" id="flow-printing">
-      <div class="kiosk-brand" aria-label="Valtra Fendt">
-        <img class="brand-logo brand-logo-valtra" src="{% static 'images/valtra-logo.png' %}" alt="Valtra">
-        <img class="brand-logo brand-logo-fendt" src="{% static 'images/fendt-logo.svg' %}" alt="Fendt">
+      <div class="kiosk-brand" aria-label="{{ brand.nombre }}">
+        {% for logo in brand.logos %}
+          <img
+            class="brand-logo {{ logo.class_name }}"
+            src="{% static logo.src %}"
+            alt="{{ logo.alt }}"
+          >
+        {% endfor %}
       </div>
       <h2>Imprimiendo vouchers</h2>
       <p id="flow-printing-text">Por favor, aguarde que se impriman todos sus vouchers.</p>

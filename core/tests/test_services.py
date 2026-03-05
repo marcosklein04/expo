@@ -18,6 +18,7 @@ from core.models import (
 from core.services import (
     CantidadInvalidaError,
     CupoAgotadoError,
+    PersonaNoEncontradaError,
     StockAgotadoError,
     lookup_persona_cupos,
     reporte_operaciones_canje,
@@ -42,6 +43,7 @@ class VoucherServiceTests(TestCase):
         Totem.objects.create(codigo="TOTEM-02", empresa=self.empresa, nombre="Totem 2")
         Totem.objects.create(codigo="TOTEM-77", empresa=self.empresa, nombre="Totem 77")
         Totem.objects.create(codigo="TOTEM-99", empresa=self.empresa, nombre="Totem 99")
+        Totem.objects.create(codigo="TOTEM-MASSEY", empresa=self.empresa, nombre="Totem Massey")
         self.persona = Persona.objects.create(
             empresa=self.empresa,
             dni="30111222",
@@ -113,6 +115,49 @@ class VoucherServiceTests(TestCase):
 
         payload = lookup_persona_cupos(dni="ab-123456", totem_id="TOTEM-01")
         self.assertEqual(payload["persona"]["dni"], persona_pasaporte.dni)
+
+    @override_settings(KIOSK_TOTEM_ID_MASSEY="TOTEM-MASSEY")
+    def test_lookup_restricts_massey_totem_to_agco_credential(self):
+        persona_no_agco = Persona.objects.create(
+            empresa=self.empresa,
+            dni="46660001",
+            nombre_apellido="Usuario No AGCO",
+            credencial="VALTRA",
+        )
+        persona_agco = Persona.objects.create(
+            empresa=self.empresa,
+            dni="46660002",
+            nombre_apellido="Usuario AGCO",
+            credencial="AGCO",
+        )
+
+        with self.assertRaises(PersonaNoEncontradaError):
+            lookup_persona_cupos(dni=persona_no_agco.dni, totem_id="TOTEM-MASSEY")
+
+        payload = lookup_persona_cupos(dni=persona_agco.dni, totem_id="TOTEM-MASSEY")
+        self.assertEqual(payload["persona"]["dni"], persona_agco.dni)
+
+    @override_settings(KIOSK_TOTEM_ID_MASSEY="TOTEM-MASSEY")
+    def test_redeem_blocks_massey_totem_for_non_agco_credential(self):
+        persona_no_agco = Persona.objects.create(
+            empresa=self.empresa,
+            dni="46660003",
+            nombre_apellido="Usuario Bloqueado",
+            credencial="STAFF",
+        )
+
+        with self.assertRaises(PersonaNoEncontradaError):
+            redeem_vouchers_batch(
+                dni=persona_no_agco.dni,
+                totem_id="TOTEM-MASSEY",
+                items=[
+                    {
+                        "comida": VoucherTipo.DESAYUNO,
+                        "canjear_propio": True,
+                        "invitados": 0,
+                    }
+                ],
+            )
 
     def test_redeem_batch_allows_guests_for_authorized_person_in_both_meals(self):
         tickets = redeem_vouchers_batch(

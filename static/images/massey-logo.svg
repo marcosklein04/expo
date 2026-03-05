@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 180" role="img" aria-labelledby="title desc">
+  <title id="title">Massey Ferguson</title>
+  <desc id="desc">Logotipo textual Massey Ferguson con emblema rojo.</desc>
+  <g fill="#be1e2d">
+    <path d="M44 50h54l-27 30z"/>
+    <path d="M18 82h106L71 132z"/>
+    <path d="M71 12l60 67H11z"/>
+  </g>
+  <text
+    x="170"
+    y="98"
+    fill="#2f2f2f"
+    font-family="RobotoLocal, Arial, sans-serif"
+    font-size="56"
+    font-weight="700"
+    letter-spacing="2"
+  >
+    MASSEY FERGUSON
+  </text>
+</svg>

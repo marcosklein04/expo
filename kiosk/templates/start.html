@@ -9,11 +9,16 @@
   <script src="{% static 'js/print.js' %}" defer></script>
   <script src="{% static 'js/kiosk/start.js' %}" defer></script>
 </head>
-<body class="page-start" data-dni-url="{% url 'kiosk:dni' %}">
+<body class="page-start brand-{{ brand.slug }}" data-dni-url="{{ urls.dni }}">
   <main class="kiosk-shell" id="start-screen">
-    <div class="kiosk-brand" aria-label="Valtra Fendt">
-      <img class="brand-logo brand-logo-valtra" src="{% static 'images/valtra-logo.png' %}" alt="Valtra">
-      <img class="brand-logo brand-logo-fendt" src="{% static 'images/fendt-logo.svg' %}" alt="Fendt">
+    <div class="kiosk-brand" aria-label="{{ brand.nombre }}">
+      {% for logo in brand.logos %}
+        <img
+          class="brand-logo {{ logo.class_name }}"
+          src="{% static logo.src %}"
+          alt="{{ logo.alt }}"
+        >
+      {% endfor %}
     </div>
 
     <section class="kiosk-center">

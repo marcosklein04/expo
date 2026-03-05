@@ -38,6 +38,10 @@ INVITADOS_AUTORIZADOS_FIJOS = {
     "FACUNDO GUZMAN",
     "GESICA PIEDITORTI",
 }
+MASSEY_CREDENCIALES_PERMITIDAS = {"AGCO", "ACGO"}
+MASSEY_ACCESS_DENIED_MESSAGE = (
+    "No se encuentra en esta base de datos, por favor dirigirse a otro tótem o vuelva a intentar."
+)
 
 
 class DomainError(Exception):
@@ -145,6 +149,36 @@ def _default_empresa_codigo() -> str:
     return normalizar_codigo_empresa(
         str(getattr(settings, "DEFAULT_EMPRESA_CODE", "DEFAULT"))
     ) or "DEFAULT"
+
+
+def _massey_totem_id() -> str:
+    raw = str(getattr(settings, "KIOSK_TOTEM_ID_MASSEY", "TOTEM-MASSEY")).strip().upper()
+    return raw or "TOTEM-MASSEY"
+
+
+def _normalizar_credencial(raw_credencial: str) -> str:
+    return "".join(ch for ch in normalizar_texto(raw_credencial) if ch.isalnum())
+
+
+def _persona_habilitada_para_totem(*, persona: Persona, totem_id: str) -> bool:
+    if str(totem_id or "").strip().upper() != _massey_totem_id():
+        return True
+
+    credencial = _normalizar_credencial(persona.credencial)
+    return credencial in MASSEY_CREDENCIALES_PERMITIDAS
+
+
+def _validar_persona_habilitada_para_totem(*, persona: Persona, totem_id: str) -> None:
+    if _persona_habilitada_para_totem(persona=persona, totem_id=totem_id):
+        return
+    raise PersonaNoEncontradaError(
+        MASSEY_ACCESS_DENIED_MESSAGE,
+        details={
+            "totem_id": totem_id,
+            "documento": persona.dni,
+            "credencial": persona.credencial,
+        },
+    )
 
 
 def _persona_puede_invitar_en_comida(*, persona: Persona, comida_codigo: str) -> bool:
@@ -485,6 +519,7 @@ def lookup_persona_cupos(
     dia = dia or _hoy()
     empresa = _resolve_empresa(empresa_codigo=empresa_codigo, totem_id=totem_id)
     persona = _get_persona(empresa=empresa, dni=normalized_dni, lock=False)
+    _validar_persona_habilitada_para_totem(persona=persona, totem_id=totem_id or "")
     comidas = _build_comidas_estado(persona=persona, dia=dia)
 
     comidas_payload = [
@@ -804,6 +839,7 @@ def redeem_vouchers_batch(
     with transaction.atomic():
         empresa = _resolve_empresa(empresa_codigo=empresa_codigo, totem_id=totem_id)
         persona = _get_persona(empresa=empresa, dni=normalized_dni, lock=True)
+        _validar_persona_habilitada_para_totem(persona=persona, totem_id=totem_id or "")
         operacion = CanjeOperacion.objects.create(
             persona=persona,
             dia=dia,

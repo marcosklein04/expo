@@ -1,6 +1,5 @@
 import json
-
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from core.models import Empresa, Persona, Ticket, Totem, VoucherTipo
 
 
@@ -8,6 +7,7 @@ class ApiTests(TestCase):
     def setUp(self):
         self.empresa = Empresa.objects.create(codigo="VALTRA_FENDT", nombre="Valtra Fendt")
         Totem.objects.create(codigo="TOTEM-01", empresa=self.empresa, nombre="Totem 1")
+        Totem.objects.create(codigo="TOTEM-MASSEY", empresa=self.empresa, nombre="Totem Massey")
         self.persona = Persona.objects.create(
             empresa=self.empresa,
             dni="30111222",
@@ -75,6 +75,22 @@ class ApiTests(TestCase):
         self.assertFalse(comidas[VoucherTipo.ALMUERZO]["invitados"]["agotado_persona"])
         self.assertTrue(comidas[VoucherTipo.ALMUERZO]["invitados"]["habilitado"])
         self.assertTrue(comidas[VoucherTipo.ALMUERZO]["invitados"]["ilimitado"])
+
+    @override_settings(KIOSK_TOTEM_ID_MASSEY="TOTEM-MASSEY")
+    def test_lookup_restricts_massey_totem_to_agco_credential(self):
+        self.persona.credencial = "VALTRA"
+        self.persona.save(update_fields=["credencial", "actualizado_en"])
+
+        response = self.client.post(
+            "/api/lookup",
+            data=json.dumps({"dni": self.persona.dni, "totem_id": "TOTEM-MASSEY"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 404)
+        payload = response.json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error"]["code"], "persona_not_found")
+        self.assertIn("No se encuentra en esta base de datos", payload["error"]["message"])
 
     def test_redeem_batch_ok(self):
         response = self.client.post(

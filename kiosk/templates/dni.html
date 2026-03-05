@@ -9,15 +9,20 @@
   <script src="{% static 'js/kiosk/dni.js' %}" defer></script>
 </head>
 <body
-  class="page-dni"
+  class="page-dni brand-{{ brand.slug }}"
   data-idle-ms="{{ idle_seconds|default:0 }}000"
-  data-start-url="{% url 'kiosk:start' %}"
-  data-vouchers-url="{% url 'kiosk:vouchers' %}"
+  data-start-url="{{ urls.start }}"
+  data-vouchers-url="{{ urls.vouchers }}"
 >
   <main class="kiosk-shell">
-    <div class="kiosk-brand" aria-label="Valtra Fendt">
-      <img class="brand-logo brand-logo-valtra" src="{% static 'images/valtra-logo.png' %}" alt="Valtra">
-      <img class="brand-logo brand-logo-fendt" src="{% static 'images/fendt-logo.svg' %}" alt="Fendt">
+    <div class="kiosk-brand" aria-label="{{ brand.nombre }}">
+      {% for logo in brand.logos %}
+        <img
+          class="brand-logo {{ logo.class_name }}"
+          src="{% static logo.src %}"
+          alt="{{ logo.alt }}"
+        >
+      {% endfor %}
     </div>
 
     <section class="document-panel">

@@ -4,8 +4,11 @@ Aplicacion de kiosco para emision de vouchers con control diario por persona/vou
 
 ## Flujo funcional
 
-1. Pantalla inicial (`/`)
-2. Ingreso de documento (`/kiosk/dni/`) con selector `DNI / PASAPORTE` y teclado nativo Android
+1. Pantalla inicial por marca:
+   - `/totem/fendt/`
+   - `/totem/valtra/`
+   - `/totem/massey/`
+2. Ingreso de documento (`.../dni/`) con selector `DNI / PASAPORTE` y teclado nativo Android
 3. Consulta de cupos del dia
 4. Canje de una o ambas comidas (desayuno/almuerzo) con invitados por comida
 5. Emision e impresion del ticket (`/tickets/<ticket_numero>/`)
@@ -43,6 +46,7 @@ Reglas principales:
 - `INVITADO_DESAYUNO` y `INVITADO_ALMUERZO`: maximo 5 por persona por comida y por dia.
 - Invitados en desayuno/almuerzo se habilitan si `Persona.puede_invitar=true` o si el nombre está en la lista fija:
   `Emiliano Ferrari`, `Luna arcamone`, `Facundo Guzmán`, `Gesica pieditorti`.
+- Restriccion de totem MASSEY: solo puede canjear si `credencial` es `AGCO` (tambien se acepta `ACGO`).
 - Pools diarios configurables por entorno (`POOL_STOCK_*`) para cortar stock global.
 - Aislamiento multiempresa: persona y pools se resuelven por `empresa + totem`.
 - Cada click en `Finalizar e imprimir` se guarda como `CanjeOperacion` con items por comida.
@@ -132,6 +136,13 @@ Registro de empresas/totems:
 .venv/bin/python manage.py upsert_empresa --codigo VALTRA_FENDT --nombre "Valtra Fendt"
 .venv/bin/python manage.py upsert_totem --codigo TOTEM-01 --empresa-code VALTRA_FENDT --nombre "Totem 01"
 ```
+
+## URLs operativas
+
+- Totem FENDT: `/totem/fendt/`
+- Totem VALTRA: `/totem/valtra/`
+- Totem MASSEY: `/totem/massey/`
+- Alta admin de invitados/personas: `/registro/personas/`
 
 ## Totems e impresion termica
 

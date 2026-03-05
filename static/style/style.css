@@ -1,4 +1,4 @@
-/* Kiosk UI (Valtra Fendt) */
+/* Kiosk UI */
 * {
   box-sizing: border-box;
 }
@@ -22,9 +22,21 @@
   --panel: #ffffff;
   --ink: #111111;
   --ink-soft: #464646;
-  --brand-green: #0a8f3f;
   --line: #1f1f1f;
   --line-soft: #b8b8b8;
+  --accent: #1f7a33;
+  --toggle-bg: #6a6a6a;
+  --toggle-active: #005f21;
+  --button-bg: #1f1f1f;
+  --button-ink: #ffffff;
+  --button-muted-bg: #6a6a6a;
+  --button-muted-ink: #ffffff;
+  --button-secondary-bg: #ffffff;
+  --button-secondary-ink: #1f1f1f;
+  --input-bg: #dcdcdc;
+  --notice: #0b5e2a;
+  --overlay-bg: rgba(255, 255, 255, 0.96);
+  --ade-logo-filter: brightness(0) saturate(100%);
   --kiosk-max-width: 720px;
 }
 
@@ -39,6 +51,72 @@ body.page-vouchers {
   place-items: center;
   padding: 0;
   background: var(--bg);
+}
+
+.brand-fendt {
+  --bg: radial-gradient(circle at 30% 0%, #1d6f28 0%, #08310f 60%, #041a09 100%);
+  --panel: radial-gradient(circle at 35% -10%, #1e7426 0%, #094213 55%, #06270c 100%);
+  --ink: #f4fff2;
+  --ink-soft: #d2e5d1;
+  --line: #7acb53;
+  --line-soft: rgba(143, 207, 109, 0.4);
+  --accent: #7acb53;
+  --toggle-bg: rgba(176, 187, 175, 0.75);
+  --toggle-active: #7acb53;
+  --button-bg: #7acb53;
+  --button-ink: #083e15;
+  --button-muted-bg: #7acb53;
+  --button-muted-ink: #083e15;
+  --button-secondary-bg: rgba(255, 255, 255, 0.15);
+  --button-secondary-ink: #f4fff2;
+  --input-bg: #dde4dd;
+  --notice: #d5ff9e;
+  --overlay-bg: rgba(8, 35, 14, 0.92);
+  --ade-logo-filter: brightness(0) invert(1);
+}
+
+.brand-valtra {
+  --bg: #d9ac00;
+  --panel: linear-gradient(180deg, #f2c400 0%, #eebc00 100%);
+  --ink: #101010;
+  --ink-soft: #222222;
+  --line: #0e0e0e;
+  --line-soft: rgba(17, 17, 17, 0.45);
+  --accent: #101010;
+  --toggle-bg: rgba(56, 56, 56, 0.6);
+  --toggle-active: #101010;
+  --button-bg: #101010;
+  --button-ink: #f5f5f5;
+  --button-muted-bg: #101010;
+  --button-muted-ink: #f5f5f5;
+  --button-secondary-bg: #f3cd2f;
+  --button-secondary-ink: #101010;
+  --input-bg: #ececec;
+  --notice: #0e0e0e;
+  --overlay-bg: rgba(242, 196, 0, 0.96);
+  --ade-logo-filter: brightness(0) saturate(100%);
+}
+
+.brand-massey {
+  --bg: #dddddd;
+  --panel: linear-gradient(180deg, #f6f6f6 0%, #ececec 100%);
+  --ink: #191919;
+  --ink-soft: #4f4f4f;
+  --line: #6b6b6b;
+  --line-soft: rgba(107, 107, 107, 0.5);
+  --accent: #bb202f;
+  --toggle-bg: #7c7c7c;
+  --toggle-active: #bb202f;
+  --button-bg: #6d6d6d;
+  --button-ink: #f6f6f6;
+  --button-muted-bg: #6d6d6d;
+  --button-muted-ink: #f6f6f6;
+  --button-secondary-bg: #f7f7f7;
+  --button-secondary-ink: #363636;
+  --input-bg: #dedede;
+  --notice: #bb202f;
+  --overlay-bg: rgba(244, 244, 244, 0.95);
+  --ade-logo-filter: brightness(0) saturate(100%);
 }
 
 .kiosk-shell {
@@ -80,6 +158,18 @@ body.page-vouchers {
   width: clamp(142px, 26vw, 236px);
 }
 
+.brand-logo-fendt-only {
+  width: clamp(162px, 28vw, 260px);
+}
+
+.brand-logo-valtra-only {
+  width: clamp(194px, 34vw, 330px);
+}
+
+.brand-logo-massey {
+  width: clamp(220px, 40vw, 380px);
+}
+
 .kiosk-title {
   position: relative;
   z-index: 1;
@@ -104,7 +194,7 @@ body.page-vouchers {
 }
 
 .kiosk-button {
-  border: 2px solid var(--line);
+  border: 2px solid var(--button-bg);
   border-radius: 999px;
   min-height: 52px;
   padding: 0 26px;
@@ -112,14 +202,15 @@ body.page-vouchers {
   font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
-  color: #ffffff;
-  background: var(--line);
+  color: var(--button-ink);
+  background: var(--button-bg);
   cursor: pointer;
 }
 
 .kiosk-button.secondary {
-  color: var(--line);
-  background: #ffffff;
+  color: var(--button-secondary-ink);
+  background: var(--button-secondary-bg);
+  border-color: var(--line);
 }
 
 .kiosk-button[disabled] {
@@ -161,7 +252,7 @@ body.page-vouchers {
   width: 100%;
   height: auto;
   display: block;
-  filter: brightness(0) saturate(100%);
+  filter: var(--ade-logo-filter);
 }
 
 /* DNI */
@@ -193,7 +284,7 @@ body.page-vouchers {
   border: 0;
   border-radius: 999px;
   min-height: 66px;
-  background: #6a6a6a;
+  background: var(--toggle-bg);
   color: #ffffff;
   text-transform: uppercase;
   font-size: 1.26rem;
@@ -203,7 +294,7 @@ body.page-vouchers {
 }
 
 .document-type-btn.is-active {
-  background: #005f21;
+  background: var(--toggle-active);
 }
 
 .document-input {
@@ -214,7 +305,7 @@ body.page-vouchers {
   min-height: 118px;
   border: 0;
   border-radius: 60px;
-  background: #dcdcdc;
+  background: var(--input-bg);
   color: var(--ink);
   text-align: center;
   font-size: 1.64rem;
@@ -257,8 +348,9 @@ body.page-vouchers {
 .dni-actions .kiosk-button {
   width: 100%;
   max-width: 420px;
-  background: #6a6a6a;
-  border-color: #6a6a6a;
+  background: var(--button-muted-bg);
+  border-color: var(--button-muted-bg);
+  color: var(--button-muted-ink);
   min-height: 60px;
   font-size: 1.2rem;
 }
@@ -418,8 +510,8 @@ They are no longer used in the current Android keyboard flow.
 }
 
 .own-toggle-btn.is-selected {
-  background: #1f7a33;
-  border-color: #1f7a33;
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 .own-toggle-btn.is-blocked {
@@ -525,7 +617,7 @@ They are no longer used in the current Android keyboard flow.
   min-height: 24px;
   margin-top: 12px;
   text-align: center;
-  color: #0b5e2a;
+  color: var(--notice);
   font-size: 0.92rem;
   font-weight: 700;
 }
@@ -572,7 +664,7 @@ They are no longer used in the current Android keyboard flow.
   gap: 14px;
   padding: 26px;
   text-align: center;
-  background: rgba(255, 255, 255, 0.96);
+  background: var(--overlay-bg);
 }
 
 .flow-screen h2 {
@@ -590,6 +682,57 @@ They are no longer used in the current Android keyboard flow.
 
 .hidden {
   display: none;
+}
+
+/* Brand variants */
+.brand-fendt .kiosk-shell {
+  box-shadow: inset 0 0 0 1px rgba(144, 201, 121, 0.45);
+}
+
+.brand-fendt .meal-card {
+  background: rgba(5, 28, 11, 0.56);
+  border-color: rgba(141, 204, 105, 0.4);
+}
+
+.brand-fendt .meal-status,
+.brand-fendt .own-hint,
+.brand-fendt .selection-info,
+.brand-fendt .flow-screen p,
+.brand-fendt .voucher-copy,
+.brand-fendt .document-hint {
+  color: #d8ecd0;
+}
+
+.brand-fendt .document-type-btn {
+  color: #0f2b11;
+}
+
+.brand-fendt .kiosk-button.secondary,
+.brand-fendt .step-btn.secondary {
+  border-color: rgba(148, 208, 121, 0.8);
+}
+
+.brand-valtra .kiosk-shell {
+  box-shadow: inset 0 0 0 2px rgba(15, 15, 15, 0.22);
+}
+
+.brand-valtra .meal-card {
+  background: rgba(255, 232, 136, 0.58);
+}
+
+.brand-massey .kiosk-shell {
+  box-shadow: inset 0 0 0 1px rgba(87, 87, 87, 0.28);
+}
+
+.brand-massey .kiosk-button,
+.brand-massey .own-toggle-btn,
+.brand-massey .step-btn {
+  border-color: #6d6d6d;
+}
+
+.brand-massey .own-toggle-btn.is-selected,
+.brand-massey .document-type-btn.is-active {
+  color: #ffffff;
 }
 
 /* Totem 1080x1920 portrait */
@@ -612,6 +755,18 @@ They are no longer used in the current Android keyboard flow.
 
   .brand-logo-fendt {
     width: 320px;
+  }
+
+  .brand-logo-fendt-only {
+    width: 360px;
+  }
+
+  .brand-logo-valtra-only {
+    width: 440px;
+  }
+
+  .brand-logo-massey {
+    width: 500px;
   }
 
   .kiosk-title {
@@ -805,6 +960,18 @@ They are no longer used in the current Android keyboard flow.
 
   .brand-logo-fendt {
     width: 238px;
+  }
+
+  .brand-logo-fendt-only {
+    width: 280px;
+  }
+
+  .brand-logo-valtra-only {
+    width: 336px;
+  }
+
+  .brand-logo-massey {
+    width: 360px;
   }
 
   .start-prompt {
