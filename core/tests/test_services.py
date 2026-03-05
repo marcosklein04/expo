@@ -88,6 +88,20 @@ class VoucherServiceTests(TestCase):
             999,
         )
 
+    def test_lookup_allows_guests_for_fixed_name_without_flag(self):
+        persona_fija = Persona.objects.create(
+            empresa=self.empresa,
+            dni="45550001",
+            nombre_apellido="Facundo Guzmán",
+            concesionario="Demo",
+            credencial="STAFF",
+            puede_invitar=False,
+        )
+        payload = lookup_persona_cupos(dni=persona_fija.dni, totem_id="TOTEM-01")
+        comidas = {item["codigo"]: item for item in payload["comidas"]}
+        self.assertTrue(comidas[VoucherTipo.DESAYUNO]["invitados"]["habilitado"])
+        self.assertTrue(comidas[VoucherTipo.ALMUERZO]["invitados"]["habilitado"])
+
     def test_lookup_accepts_alphanumeric_document_for_passport(self):
         persona_pasaporte = Persona.objects.create(
             empresa=self.empresa,
@@ -143,7 +157,7 @@ class VoucherServiceTests(TestCase):
                 items=[{"comida": VoucherTipo.ALMUERZO, "invitados": 1}],
             )
 
-    def test_redeem_batch_blocks_guests_even_if_flag_is_true_when_name_not_authorized(self):
+    def test_redeem_batch_allows_guests_when_flag_is_true(self):
         persona_con_flag = Persona.objects.create(
             empresa=self.empresa,
             dni="34444555",
@@ -153,12 +167,19 @@ class VoucherServiceTests(TestCase):
             puede_invitar=True,
         )
 
-        with self.assertRaises(CantidadInvalidaError):
-            redeem_vouchers_batch(
-                dni=persona_con_flag.dni,
-                totem_id="TOTEM-01",
-                items=[{"comida": VoucherTipo.DESAYUNO, "invitados": 1}],
-            )
+        tickets = redeem_vouchers_batch(
+            dni=persona_con_flag.dni,
+            totem_id="TOTEM-01",
+            items=[
+                {
+                    "comida": VoucherTipo.DESAYUNO,
+                    "canjear_propio": False,
+                    "invitados": 1,
+                }
+            ],
+        )
+        self.assertEqual(len(tickets), 1)
+        self.assertEqual(tickets[0].voucher_tipo.codigo, VoucherTipo.INVITADO_DESAYUNO)
 
     def test_redeem_batch_allows_unlimited_breakfast_guests_for_authorized_person(self):
         persona_autorizada = Persona.objects.create(

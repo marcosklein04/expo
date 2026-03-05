@@ -29,6 +29,12 @@
 
     <section class="voucher">{{ ticket.voucher_tipo.codigo }}</section>
 
+    {% if ticket.voucher_tipo.codigo == 'DESAYUNO' or ticket.voucher_tipo.codigo == 'ALMUERZO' %}
+      <section class="meta">
+        <div><strong>Tipo de comida:</strong> {{ ticket.persona.get_tipo_vianda_display }}</div>
+      </section>
+    {% endif %}
+
     <section class="meta">
       <div><strong>Día:</strong> {{ ticket.dia|date:'Y-m-d' }}</div>
       <div><strong>Hora:</strong> {{ ticket.creado_en|date:'Y-m-d H:i:s' }}</div>

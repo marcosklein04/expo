@@ -15,12 +15,14 @@ class PersonaRegistroForm(forms.ModelForm):
             "concesionario",
             "credencial",
             "tipo_vianda",
+            "puede_invitar",
             "activo",
         ]
         labels = {
             "dni": "DNI/Pasaporte",
             "nombre_apellido": "Nombre y apellido",
             "tipo_vianda": "Tipo de vianda",
+            "puede_invitar": "Puede invitar",
         }
 
     def clean_dni(self):

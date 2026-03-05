@@ -39,6 +39,7 @@ def personas_registro(request):
                 "concesionario": data["concesionario"],
                 "credencial": data["credencial"],
                 "tipo_vianda": data["tipo_vianda"],
+                "puede_invitar": data["puede_invitar"],
                 "activo": data["activo"],
             },
         )

@@ -41,7 +41,8 @@ Reglas principales:
 
 - `DESAYUNO` y `ALMUERZO`: maximo 1 fijo por persona por dia.
 - `INVITADO_DESAYUNO` y `INVITADO_ALMUERZO`: maximo 5 por persona por comida y por dia.
-- Invitados ilimitados solo para estas personas (por nombre en base): `Emiliano Ferrari`, `Luna arcamone`, `Facundo Guzmán`, `Gesica pieditorti`.
+- Invitados en desayuno/almuerzo se habilitan si `Persona.puede_invitar=true` o si el nombre está en la lista fija:
+  `Emiliano Ferrari`, `Luna arcamone`, `Facundo Guzmán`, `Gesica pieditorti`.
 - Pools diarios configurables por entorno (`POOL_STOCK_*`) para cortar stock global.
 - Aislamiento multiempresa: persona y pools se resuelven por `empresa + totem`.
 - Cada click en `Finalizar e imprimir` se guarda como `CanjeOperacion` con items por comida.

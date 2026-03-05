@@ -22,6 +22,7 @@
     dni: screen.dataset.personaDni || "",
     credencial: screen.dataset.personaCredencial || "-",
     concesionario: screen.dataset.personaConcesionario || "-",
+    tipoVianda: screen.dataset.personaTipoVianda || "-",
   };
 
   const notice = document.getElementById("notice");
@@ -343,6 +344,9 @@
     const NORMAL = ESC + "!" + String.fromCharCode(0);
     const CUT = GS + "V" + String.fromCharCode(66) + String.fromCharCode(0);
     const SEP = "--------------------------------";
+    const voucherCode = String(ticket.voucher || "").toUpperCase();
+    const isGuestVoucher = voucherCode.includes("INVITADO");
+    const mealType = String(ticket.tipo_vianda || personaPrintData.tipoVianda || "-");
 
     let text = ALIGN_CENTER + NORMAL;
     text += BOLD_ON + "EXPOAGRO" + BOLD_OFF + LF;
@@ -356,6 +360,9 @@
     text += SEP + LF;
 
     text += ALIGN_CENTER + BOLD_ON + (ticket.voucher || "-") + BOLD_OFF + LF;
+    if (!isGuestVoucher) {
+      text += ALIGN_LEFT + `Tipo de comida: ${mealType}` + LF;
+    }
     text += ALIGN_LEFT + SEP + LF;
 
     text += `Dia: ${ticket.dia || formatDate(ticket.creado_en, false)}` + LF;

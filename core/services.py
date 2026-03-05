@@ -137,7 +137,8 @@ def normalizar_texto(raw_value: str) -> str:
     if not raw_value:
         return ""
     normalized = unicodedata.normalize("NFKD", str(raw_value).strip().upper())
-    return "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    without_accents = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    return " ".join(without_accents.split())
 
 
 def _default_empresa_codigo() -> str:
@@ -147,10 +148,11 @@ def _default_empresa_codigo() -> str:
 
 
 def _persona_puede_invitar_en_comida(*, persona: Persona, comida_codigo: str) -> bool:
-    return (
-        comida_codigo in COMIDAS
-        and normalizar_texto(persona.nombre_apellido) in INVITADOS_AUTORIZADOS_FIJOS
-    )
+    if comida_codigo not in COMIDAS:
+        return False
+    if bool(persona.puede_invitar):
+        return True
+    return normalizar_texto(persona.nombre_apellido) in INVITADOS_AUTORIZADOS_FIJOS
 
 
 def _ensure_default_empresa() -> Empresa:

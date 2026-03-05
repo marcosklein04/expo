@@ -2,7 +2,7 @@
 
 {% block content %}
   <h1>Registro de personas</h1>
-  <p>Empresa destino: <strong>{{ empresa.codigo }}</strong></p>
+  <!--<p>Empresa destino: <strong>{{ empresa.codigo }}</strong></p>-->
   <p>Cargá datos del padrón y el tipo de vianda.</p>
 
   <form method="post" style="max-width: 860px; margin-bottom: 24px;">
@@ -20,26 +20,28 @@
   <table id="result_list">
     <thead>
       <tr>
-        <th>Empresa</th>
+        <!--<th>Empresa</th>-->
         <th>DNI/Pasaporte</th>
         <th>Nombre y apellido</th>
         <th>Concesionario</th>
         <th>Credencial</th>
         <th>Tipo de vianda</th>
-        <th>Activo</th>
+        <th>Puede invitar</th>
+        <!--<th>Activo</th>-->
         <th>Actualizado</th>
       </tr>
     </thead>
     <tbody>
       {% for persona in recientes %}
         <tr>
-          <td>{{ persona.empresa.codigo }}</td>
+          <!--<td>{{ persona.empresa.codigo }}</td>-->
           <td>{{ persona.dni }}</td>
           <td>{{ persona.nombre_apellido }}</td>
           <td>{{ persona.concesionario }}</td>
           <td>{{ persona.credencial }}</td>
           <td>{{ persona.get_tipo_vianda_display }}</td>
-          <td>{% if persona.activo %}Sí{% else %}No{% endif %}</td>
+          <td>{% if persona.puede_invitar %}Sí{% else %}No{% endif %}</td>
+          <!--<td>{% if persona.activo %}Sí{% else %}No{% endif %}</td>-->
           <td>{{ persona.actualizado_en|date:"d/m/Y H:i:s" }}</td>
         </tr>
       {% empty %}

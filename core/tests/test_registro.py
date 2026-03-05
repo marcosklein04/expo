@@ -35,6 +35,7 @@ class RegistroPersonasTests(TestCase):
                 "concesionario": "Demo",
                 "credencial": "INV",
                 "tipo_vianda": "VEGETARIANO",
+                "puede_invitar": "on",
                 "activo": "on",
             },
             follow=True,
@@ -42,3 +43,4 @@ class RegistroPersonasTests(TestCase):
         self.assertEqual(response.status_code, 200)
         persona = Persona.objects.get(empresa=self.empresa, dni="AB123456")
         self.assertEqual(persona.tipo_vianda, Persona.VIANDA_VEGETARIANO)
+        self.assertTrue(persona.puede_invitar)

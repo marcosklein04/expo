@@ -45,6 +45,7 @@ def _serialize_ticket(ticket) -> dict:
         "dia": ticket.dia.isoformat(),
         "creado_en": ticket.creado_en.isoformat(),
         "voucher": ticket.voucher_tipo.codigo,
+        "tipo_vianda": ticket.persona.get_tipo_vianda_display(),
         "totem_id": ticket.totem_id,
         "print_url": reverse("tickets:print_ticket", kwargs={"ticket_numero": ticket.ticket_numero}),
     }
