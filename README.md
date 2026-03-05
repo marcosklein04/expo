@@ -46,7 +46,7 @@ Reglas principales:
 - `INVITADO_DESAYUNO` y `INVITADO_ALMUERZO`: maximo 5 por persona por comida y por dia.
 - Invitados en desayuno/almuerzo se habilitan si `Persona.puede_invitar=true` o si el nombre está en la lista fija:
   `Emiliano Ferrari`, `Luna arcamone`, `Facundo Guzmán`, `Gesica pieditorti`.
-- Restriccion de totem MASSEY: solo puede canjear si `credencial` es `AGCO` (tambien se acepta `ACGO`).
+- Restriccion de totem MASSEY: solo puede canjear si `credencial` es `AGCO`.
 - Pools diarios configurables por entorno (`POOL_STOCK_*`) para cortar stock global.
 - Aislamiento multiempresa: persona y pools se resuelven por `empresa + totem`.
 - Cada click en `Finalizar e imprimir` se guarda como `CanjeOperacion` con items por comida.

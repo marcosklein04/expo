@@ -38,7 +38,7 @@ INVITADOS_AUTORIZADOS_FIJOS = {
     "FACUNDO GUZMAN",
     "GESICA PIEDITORTI",
 }
-MASSEY_CREDENCIALES_PERMITIDAS = {"AGCO", "ACGO"}
+MASSEY_CREDENCIALES_PERMITIDAS = {"AGCO"}
 MASSEY_ACCESS_DENIED_MESSAGE = (
     "No se encuentra en esta base de datos, por favor dirigirse a otro tótem o vuelva a intentar."
 )
