@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.admin.views.decorators import staff_member_required
 from django.shortcuts import redirect, render
 
 from core.forms import PersonaRegistroForm
@@ -24,7 +23,6 @@ def _empresa_registro() -> Empresa:
     return empresa
 
 
-@staff_member_required
 def personas_registro(request):
     empresa = _empresa_registro()
     form = PersonaRegistroForm(request.POST or None)

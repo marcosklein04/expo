@@ -1,54 +1,98 @@
-{% extends "admin/base_site.html" %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Registro de personas</title>
+    <link rel="stylesheet" href="{% static 'style/style.css' %}" />
+  </head>
+  <body class="page-registro">
+    <main class="registro-shell">
+      <section class="registro-hero">
+        <p class="registro-eyebrow">Expoagro</p>
+        <h1>Formulario de Personas</h1>
+        <p class="registro-subtitle">
+          Cargá o actualizá personas del padrón para vouchers.
+        </p>
+        <p class="registro-company">Empresa destino: <strong>{{ empresa.codigo }}</strong></p>
+      </section>
 
-{% block content %}
-  <h1>Registro de personas</h1>
-  <!--<p>Empresa destino: <strong>{{ empresa.codigo }}</strong></p>-->
-  <p>Cargá datos del padrón y el tipo de vianda.</p>
+      {% if messages %}
+        <section class="registro-messages" aria-live="polite">
+          {% for message in messages %}
+            <p class="registro-message {{ message.tags }}">{{ message }}</p>
+          {% endfor %}
+        </section>
+      {% endif %}
 
-  <form method="post" style="max-width: 860px; margin-bottom: 24px;">
-    {% csrf_token %}
-    {{ form.non_field_errors }}
-    <table>
-      {{ form.as_table }}
-    </table>
-    <div style="margin-top: 12px;">
-      <button type="submit" class="button">Guardar</button>
-    </div>
-  </form>
+      {% if form.non_field_errors %}
+        <section class="registro-messages" aria-live="polite">
+          {% for error in form.non_field_errors %}
+            <p class="registro-message error">{{ error }}</p>
+          {% endfor %}
+        </section>
+      {% endif %}
 
-  <h2>Últimas personas cargadas/actualizadas</h2>
-  <table id="result_list">
-    <thead>
-      <tr>
-        <!--<th>Empresa</th>-->
-        <th>DNI/Pasaporte</th>
-        <th>Nombre y apellido</th>
-        <th>Concesionario</th>
-        <th>Credencial</th>
-        <th>Tipo de vianda</th>
-        <th>Puede invitar</th>
-        <!--<th>Activo</th>-->
-        <th>Actualizado</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for persona in recientes %}
-        <tr>
-          <!--<td>{{ persona.empresa.codigo }}</td>-->
-          <td>{{ persona.dni }}</td>
-          <td>{{ persona.nombre_apellido }}</td>
-          <td>{{ persona.concesionario }}</td>
-          <td>{{ persona.credencial }}</td>
-          <td>{{ persona.get_tipo_vianda_display }}</td>
-          <td>{% if persona.puede_invitar %}Sí{% else %}No{% endif %}</td>
-          <!--<td>{% if persona.activo %}Sí{% else %}No{% endif %}</td>-->
-          <td>{{ persona.actualizado_en|date:"d/m/Y H:i:s" }}</td>
-        </tr>
-      {% empty %}
-        <tr>
-          <td colspan="8">No hay personas cargadas.</td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-{% endblock %}
+      <section class="registro-panel">
+        <h2>Cargar Persona</h2>
+        <form method="post" class="registro-form" novalidate>
+          {% csrf_token %}
+          <div class="registro-grid">
+            {% for field in form %}
+              <div class="registro-field {% if field.field.widget.input_type == 'checkbox' %}checkbox{% endif %}">
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.errors %}
+                  {% for error in field.errors %}
+                    <p class="registro-field-error">{{ error }}</p>
+                  {% endfor %}
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+
+          <div class="registro-actions">
+            <button type="submit" class="registro-submit">Guardar</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="registro-panel">
+        <h2>Últimas personas cargadas/actualizadas</h2>
+        <div class="registro-table-wrap">
+          <table class="registro-table">
+            <thead>
+              <tr>
+                <th>DNI/Pasaporte</th>
+                <th>Nombre y apellido</th>
+                <th>Concesionario</th>
+                <th>Credencial</th>
+                <th>Tipo de vianda</th>
+                <th>Puede invitar</th>
+                <th>Actualizado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for persona in recientes %}
+                <tr>
+                  <td>{{ persona.dni }}</td>
+                  <td>{{ persona.nombre_apellido }}</td>
+                  <td>{{ persona.concesionario }}</td>
+                  <td>{{ persona.credencial }}</td>
+                  <td>{{ persona.get_tipo_vianda_display }}</td>
+                  <td>{% if persona.puede_invitar %}Sí{% else %}No{% endif %}</td>
+                  <td>{{ persona.actualizado_en|date:"d/m/Y H:i:s" }}</td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="7">No hay personas cargadas.</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

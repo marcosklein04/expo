@@ -1,10 +1,10 @@
-from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from core.models import Empresa, Persona
 
 
+@override_settings(SECURE_SSL_REDIRECT=False, DEFAULT_EMPRESA_CODE="DEFAULT")
 class RegistroPersonasTests(TestCase):
     def setUp(self):
         self.empresa, _ = Empresa.objects.get_or_create(
@@ -13,20 +13,12 @@ class RegistroPersonasTests(TestCase):
         )
         self.url = reverse("core:personas_registro")
 
-    def test_requires_login(self):
+    def test_form_is_public(self):
         response = self.client.get(self.url)
-        self.assertEqual(response.status_code, 302)
-        self.assertIn("login", response["Location"])
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Formulario de Personas")
 
     def test_creates_persona_with_meal_type(self):
-        user_model = get_user_model()
-        user = user_model.objects.create_user(
-            username="operador",
-            password="clave-segura-123",
-            is_staff=True,
-        )
-        self.client.force_login(user)
-
         response = self.client.post(
             self.url,
             data={

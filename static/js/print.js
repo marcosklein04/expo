@@ -1,4 +1,4 @@
-function rawBtPrintText(text, packageName = "ru.a402d.rawbtprinter") {
+/*function rawBtPrintText(text, packageName = "ru.a402d.rawbtprinter") {
   const textEncoded = encodeURI(String(text || ""));
   const suffix = `#Intent;scheme=rawbt;package=${packageName};end;`;
   window.location.href = `intent:${textEncoded}${suffix}`;
@@ -6,7 +6,7 @@ function rawBtPrintText(text, packageName = "ru.a402d.rawbtprinter") {
 
 function startPrinterRawBt() {
   rawBtPrintText("test");
-}
+}*/
 
 function closePrint() {
   if (this && this.__container__ && this.__container__.parentNode) {
