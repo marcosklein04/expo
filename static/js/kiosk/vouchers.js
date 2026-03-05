@@ -13,6 +13,8 @@
   const PRINTING_WAIT_MESSAGE = "Por favor, aguarde que se impriman todos sus vouchers";
   const PRINTING_MIN_VISIBLE_MS = 20000;
   const UNLIMITED_GUEST_SOFT_MAX = 999;
+  const RAWBT_BATCH_SIZE = 3;
+  const RAWBT_BATCH_DELAY_MS = 220;
 
   const isAndroidDevice = /Android/i.test(navigator.userAgent || "");
   const forceBrowserMode = new URLSearchParams(window.location.search).get("print_mode") === "browser";
@@ -462,10 +464,17 @@
 
   async function printTickets(tickets) {
     if (preferRawBt) {
-      for (let index = 0; index < tickets.length; index += 1) {
-        const ticket = tickets[index];
-        printTicket(ticket);
-        await sleep(850);
+      const payloads = tickets.map((ticket) => buildRawBtTicketPayload(ticket)).filter(Boolean);
+      if (tickets.length) {
+        lastPrintedTicket = tickets[tickets.length - 1];
+      }
+
+      for (let index = 0; index < payloads.length; index += RAWBT_BATCH_SIZE) {
+        const chunk = payloads.slice(index, index + RAWBT_BATCH_SIZE).join("");
+        sendToRawBt(chunk);
+        if (index + RAWBT_BATCH_SIZE < payloads.length) {
+          await sleep(RAWBT_BATCH_DELAY_MS);
+        }
       }
       return;
     }
