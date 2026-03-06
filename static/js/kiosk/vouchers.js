@@ -448,12 +448,14 @@
       return;
     }
     if (!message) {
+      document.body.classList.remove("flow-active");
       flowPrinting.classList.add("hidden");
       return;
     }
     if (flowPrintingText) {
       flowPrintingText.textContent = message;
     }
+    document.body.classList.add("flow-active");
     flowPrinting.classList.remove("hidden");
   }
 
