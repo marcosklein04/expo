@@ -775,6 +775,11 @@ They are no longer used in the current Android keyboard flow.
   color: #0f2b11;
 }
 
+.brand-fendt .brand-logo-fendt-only,
+.brand-fendt .brand-logo-fendt {
+  filter: brightness(0) invert(1);
+}
+
 .brand-fendt .kiosk-button.secondary,
 .brand-fendt .step-btn.secondary {
   border-color: rgba(148, 208, 121, 0.8);
