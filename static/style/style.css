@@ -697,18 +697,20 @@ They are no longer used in the current Android keyboard flow.
 }
 
 .flow-screen {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 9999;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  place-content: center;
   gap: 20px;
   padding: 40px 34px;
   text-align: center;
   background: rgba(6, 12, 10, 0.94);
   backdrop-filter: blur(2px);
+  overflow: hidden;
 }
 
 .flow-screen .kiosk-brand {
@@ -719,7 +721,8 @@ They are no longer used in the current Android keyboard flow.
   display: grid;
   gap: 14px;
   justify-items: center;
-  max-width: 90%;
+  width: min(90%, 560px);
+  margin: 0 auto;
 }
 
 .flow-screen h2 {
