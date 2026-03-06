@@ -3,7 +3,7 @@
 {% block object-tools-items %}
   <li>
     <a href="{% url 'admin:core_ticket_resumen_dia' %}{% if request.GET.dia__exact %}?dia={{ request.GET.dia__exact }}{% endif %}">
-      Ver resumen del dia
+      Ver resumen por fecha
     </a>
   </li>
   {{ block.super }}

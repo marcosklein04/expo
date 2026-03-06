@@ -701,13 +701,10 @@ They are no longer used in the current Android keyboard flow.
   inset: 0;
   z-index: 9999;
   width: 100vw;
-  height: 100dvh;
-  display: grid;
-  place-items: center;
-  place-content: center;
-  gap: 20px;
-  padding: 40px 34px;
-  text-align: center;
+  height: 100vh;
+  min-height: 100svh;
+  display: block;
+  padding: 0;
   background: #060c0a;
   backdrop-filter: blur(2px);
   overflow: hidden;
@@ -723,7 +720,7 @@ body.page-vouchers.flow-active .kiosk-shell {
   box-shadow: none;
 }
 
-body.page-vouchers.flow-active .kiosk-shell > :not(.flow-screen) {
+body.page-vouchers.flow-active .kiosk-shell > * {
   opacity: 0;
   pointer-events: none;
 }
@@ -733,11 +730,17 @@ body.page-vouchers.flow-active .kiosk-shell > :not(.flow-screen) {
 }
 
 .flow-message {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   display: grid;
   gap: 14px;
   justify-items: center;
-  width: min(90%, 560px);
-  margin: 0 auto;
+  width: min(calc(100vw - 68px), 560px);
+  max-width: 100%;
+  margin: 0;
+  text-align: center;
 }
 
 .flow-screen h2 {
@@ -1223,7 +1226,7 @@ body.page-vouchers.flow-active .kiosk-shell > :not(.flow-screen) {
   }
 
   .flow-screen {
-    padding: 46px 36px;
+    min-height: 100dvh;
   }
 
   .flow-screen h2 {

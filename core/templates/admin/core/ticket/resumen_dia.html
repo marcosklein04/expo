@@ -3,6 +3,21 @@
 {% block content %}
   <h1>Resumen del dia {{ dia_label }}</h1>
 
+  <form method="get" style="margin: 0 0 16px; display: flex; gap: 10px; align-items: end; flex-wrap: wrap;">
+    <div>
+      <label for="dia" style="display: block; margin: 0 0 6px; font-weight: 600;">Fecha</label>
+      <input
+        id="dia"
+        name="dia"
+        type="date"
+        value="{{ dia_iso }}"
+        style="min-width: 180px; padding: 8px 10px;"
+      >
+    </div>
+    <button type="submit" class="button">Ver historial</button>
+    <a class="button" href="{% url 'admin:core_ticket_resumen_dia' %}">Hoy</a>
+  </form>
+
   <div style="margin: 0 0 16px; display: flex; gap: 10px; flex-wrap: wrap;">
     <a class="button" href="{% url 'admin:core_ticket_export_resumen_dia' %}?dia={{ dia_iso }}">
       Descargar CSV del dia
