@@ -36,3 +36,20 @@ class RegistroPersonasTests(TestCase):
         persona = Persona.objects.get(empresa=self.empresa, dni="AB123456")
         self.assertEqual(persona.tipo_vianda, Persona.VIANDA_VEGETARIANO)
         self.assertTrue(persona.puede_invitar)
+
+    def test_creates_persona_with_celiac_meal_type(self):
+        response = self.client.post(
+            self.url,
+            data={
+                "dni": "30111222",
+                "nombre_apellido": "Ada Lovelace",
+                "concesionario": "Demo",
+                "credencial": "Valtra",
+                "tipo_vianda": "CELIACO",
+                "activo": "on",
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        persona = Persona.objects.get(empresa=self.empresa, dni="30111222")
+        self.assertEqual(persona.tipo_vianda, Persona.VIANDA_CELIACO)

@@ -40,9 +40,11 @@ class Totem(models.Model):
 class Persona(models.Model):
     VIANDA_CLASICO = "CLASICO"
     VIANDA_VEGETARIANO = "VEGETARIANO"
+    VIANDA_CELIACO = "CELIACO"
     VIANDA_CHOICES = [
         (VIANDA_CLASICO, "Clasico"),
         (VIANDA_VEGETARIANO, "Vegetariano"),
+        (VIANDA_CELIACO, "Celiaco"),
     ]
 
     empresa = models.ForeignKey(

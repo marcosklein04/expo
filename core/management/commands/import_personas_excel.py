@@ -61,6 +61,8 @@ def _cell_to_vianda(value: object) -> str:
     text = _cell_to_text(value).strip().lower()
     if text in {"vegetariano", "veg", "vegetariana"}:
         return Persona.VIANDA_VEGETARIANO
+    if text in {"celiaco", "celiaca", "sin tacc", "sintacc", "sin gluten"}:
+        return Persona.VIANDA_CELIACO
     return Persona.VIANDA_CLASICO
 
 
