@@ -463,6 +463,19 @@
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  function nextPaint() {
+    return new Promise((resolve) => {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(resolve);
+      });
+    });
+  }
+
+  async function settleFlowScreen() {
+    await nextPaint();
+    await sleep(120);
+  }
+
   async function redeemBatch(items) {
     const response = await fetch(redeemUrl, {
       method: "POST",
@@ -579,6 +592,7 @@
     mealCards.forEach((card) => updateCardUI(card));
     updateSelectionInfo();
     updateSupportUi();
+    await settleFlowScreen();
 
     try {
       const data = await redeemBatch(items);
@@ -632,6 +646,7 @@
     mealCards.forEach((card) => updateCardUI(card));
     updateSelectionInfo();
     updateSupportUi();
+    await settleFlowScreen();
 
     try {
       const data = await requestSupportReprint(pin);

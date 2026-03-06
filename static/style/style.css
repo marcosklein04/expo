@@ -718,6 +718,16 @@ body.page-vouchers.flow-active {
   background: #060c0a;
 }
 
+body.page-vouchers.flow-active .kiosk-shell {
+  background: #060c0a;
+  box-shadow: none;
+}
+
+body.page-vouchers.flow-active .kiosk-shell > :not(.flow-screen) {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .flow-screen .kiosk-brand {
   display: none;
 }
