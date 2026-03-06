@@ -35,7 +35,6 @@
   const selectedCount = document.getElementById("selected-count");
   const flowPrinting = document.getElementById("flow-printing");
   const flowPrintingText = document.getElementById("flow-printing-text");
-  const reprintLastBtn = document.getElementById("reprint-last");
   const finalizeBtn = document.getElementById("finalize-selection");
   const clearBtn = document.getElementById("clear-selection");
   const supportOpenBtn = document.getElementById("support-open");
@@ -49,7 +48,6 @@
 
   let idleTimer = null;
   let processing = false;
-  let lastPrintedTicket = null;
 
   function goDni() {
     window.location.href = dniUrl;
@@ -438,7 +436,6 @@
     if (!ticket) {
       return;
     }
-    lastPrintedTicket = ticket;
     if (preferRawBt && window.RawBtPrinter) {
       sendToRawBt(buildRawBtTicketPayload(ticket));
       return;
@@ -518,9 +515,6 @@
   async function printTickets(tickets) {
     if (preferRawBt) {
       const payloads = tickets.map((ticket) => buildRawBtTicketPayload(ticket)).filter(Boolean);
-      if (tickets.length) {
-        lastPrintedTicket = tickets[tickets.length - 1];
-      }
 
       for (let index = 0; index < payloads.length; index += RAWBT_BATCH_SIZE) {
         const chunk = payloads.slice(index, index + RAWBT_BATCH_SIZE).join("");
@@ -665,14 +659,6 @@
       updateSelectionInfo();
       updateSupportUi();
     }
-  }
-
-  if (reprintLastBtn) {
-    reprintLastBtn.addEventListener("click", () => {
-      if (lastPrintedTicket) {
-        printTicket(lastPrintedTicket);
-      }
-    });
   }
 
   if (clearBtn) {

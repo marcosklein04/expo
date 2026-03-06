@@ -161,8 +161,8 @@ def _default_empresa_codigo() -> str:
 
 
 def _massey_totem_id() -> str:
-    raw = str(getattr(settings, "KIOSK_TOTEM_ID_MASSEY", "TOTEM-MASSEY")).strip().upper()
-    return raw or "TOTEM-MASSEY"
+    raw = str(getattr(settings, "KIOSK_TOTEM_ID_MASSEY", "TOTEM_MASSEY")).strip().upper()
+    return raw or "TOTEM_MASSEY"
 
 
 def _support_reprint_pin() -> str:
@@ -938,7 +938,7 @@ def obtener_tickets_ultimo_canje(
 
     cleaned_totem_id = str(totem_id or "").strip() or str(settings.DEFAULT_TOTEM_ID).strip()
     if not cleaned_totem_id:
-        cleaned_totem_id = "TOTEM-01"
+        cleaned_totem_id = "TOTEM_FENDT"
 
     dia = dia or _hoy()
     empresa = _resolve_empresa(empresa_codigo=empresa_codigo, totem_id=cleaned_totem_id)

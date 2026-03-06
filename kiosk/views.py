@@ -17,7 +17,7 @@ KIOSK_BRANDS: dict[str, dict[str, object]] = {
         "slug": "fendt",
         "nombre": "Fendt",
         "totem_env": "KIOSK_TOTEM_ID_FENDT",
-        "totem_default": "TOTEM-FENDT",
+        "totem_default": "TOTEM_FENDT",
         "logos": [
             {
                 "src": "images/fendt-logo-white.svg",
@@ -30,7 +30,7 @@ KIOSK_BRANDS: dict[str, dict[str, object]] = {
         "slug": "valtra",
         "nombre": "Valtra",
         "totem_env": "KIOSK_TOTEM_ID_VALTRA",
-        "totem_default": "TOTEM-VALTRA",
+        "totem_default": "TOTEM_VALTRA",
         "logos": [
             {
                 "src": "images/valtra-logo.png",
@@ -43,7 +43,7 @@ KIOSK_BRANDS: dict[str, dict[str, object]] = {
         "slug": "massey",
         "nombre": "Massey Ferguson",
         "totem_env": "KIOSK_TOTEM_ID_MASSEY",
-        "totem_default": "TOTEM-MASSEY",
+        "totem_default": "TOTEM_MASSEY",
         "logos": [
             {
                 "src": "images/massey-logo-brand.png",
