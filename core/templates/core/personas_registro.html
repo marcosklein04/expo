@@ -50,6 +50,16 @@
           <form method="post" class="registro-form row g-3" novalidate>
             {% csrf_token %}
 
+            <div class="col-12 col-md-4">
+              <label for="{{ form.padron_destino.id_for_label }}" class="form-label">
+                {{ form.padron_destino.label }}
+              </label>
+              {{ form.padron_destino }}
+              {% for error in form.padron_destino.errors %}
+                <p class="registro-field-error">{{ error }}</p>
+              {% endfor %}
+            </div>
+
             <div class="col-12 col-md-6">
               <label for="{{ form.dni.id_for_label }}" class="form-label">{{ form.dni.label }}</label>
               {{ form.dni }}
@@ -58,7 +68,7 @@
               {% endfor %}
             </div>
 
-            <div class="col-12 col-md-6">
+            <div class="col-12 col-md-8">
               <label for="{{ form.nombre_apellido.id_for_label }}" class="form-label">
                 {{ form.nombre_apellido.label }}
               </label>

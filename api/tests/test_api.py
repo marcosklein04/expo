@@ -76,21 +76,29 @@ class ApiTests(TestCase):
         self.assertTrue(comidas[VoucherTipo.ALMUERZO]["invitados"]["habilitado"])
         self.assertTrue(comidas[VoucherTipo.ALMUERZO]["invitados"]["ilimitado"])
 
-    @override_settings(KIOSK_TOTEM_ID_MASSEY="TOTEM-MASSEY")
-    def test_lookup_restricts_massey_totem_to_agco_credential(self):
-        self.persona.credencial = "VALTRA"
-        self.persona.save(update_fields=["credencial", "actualizado_en"])
+    def test_lookup_resolves_massey_padron_by_totem(self):
+        empresa_massey = Empresa.objects.create(codigo="MASSEY", nombre="Massey")
+        Totem.objects.update_or_create(
+            codigo="TOTEM-MASSEY",
+            defaults={"empresa": empresa_massey, "nombre": "Totem Massey"},
+        )
+        persona_massey = Persona.objects.create(
+            empresa=empresa_massey,
+            dni="46660001",
+            nombre_apellido="Usuario Massey",
+            credencial="STAFF",
+        )
 
         response = self.client.post(
             "/api/lookup",
-            data=json.dumps({"dni": self.persona.dni, "totem_id": "TOTEM-MASSEY"}),
+            data=json.dumps({"dni": persona_massey.dni, "totem_id": "TOTEM-MASSEY"}),
             content_type="application/json",
         )
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertFalse(payload["ok"])
-        self.assertEqual(payload["error"]["code"], "persona_not_found")
-        self.assertIn("No se encuentra en esta base de datos", payload["error"]["message"])
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["empresa"]["codigo"], empresa_massey.codigo)
+        self.assertEqual(payload["persona"]["dni"], persona_massey.dni)
 
     def test_redeem_batch_ok(self):
         response = self.client.post(

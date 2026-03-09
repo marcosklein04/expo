@@ -8,10 +8,6 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 
 from core.services import DomainError, lookup_persona_cupos
 
-MASSEY_ACCESS_DENIED_MESSAGE = (
-    "No se encuentra este nombre, diríjase hacia otro tótem."
-)
-
 KIOSK_BRANDS: dict[str, dict[str, object]] = {
     "fendt": {
         "slug": "fendt",
@@ -96,13 +92,12 @@ def _build_brand_urls(brand_slug: str) -> dict[str, str]:
 
 
 def _base_context(brand: dict[str, object]) -> dict[str, object]:
-    empresa_codigo = str(getattr(settings, "DEFAULT_EMPRESA_CODE", "")).strip()
     return {
         "idle_seconds": settings.KIOSK_IDLE_SECONDS,
         "brand": brand,
         "urls": _build_brand_urls(str(brand["slug"])),
         "totem_id": str(brand["totem_id"]),
-        "empresa_codigo": empresa_codigo,
+        "empresa_codigo": "",
     }
 
 
@@ -162,13 +157,10 @@ def vouchers_screen(request: HttpRequest, brand: str) -> HttpResponse:
         data = lookup_persona_cupos(
             dni=document,
             totem_id=str(brand_cfg["totem_id"]),
-            empresa_codigo=(str(context["empresa_codigo"]).strip() or None),
+            empresa_codigo=None,
         )
         context.update(data)
     except DomainError as exc:
-        if str(brand_cfg["slug"]) == "massey" and exc.code == "persona_not_found":
-            context["error"] = MASSEY_ACCESS_DENIED_MESSAGE
-        else:
-            context["error"] = exc.message
+        context["error"] = exc.message
 
     return render(request, "vouchers.html", context)

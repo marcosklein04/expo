@@ -31,15 +31,9 @@ INVITADO_POR_COMIDA = {
     VoucherTipo.ALMUERZO: VoucherTipo.INVITADO_ALMUERZO,
 }
 INVITADOS_ILIMITADOS_SOFT_MAX_UI = 999
-INVITADOS_AUTORIZADOS_FIJOS = {
-    "EMILIANO FERRARI",
-    "LUNA ARCAMONE",
-    "FACUNDO GUZMAN",
-    "GESICA PIEDITORTI",
-}
-MASSEY_CREDENCIALES_PERMITIDAS = {"AGCO"}
-MASSEY_ACCESS_DENIED_MESSAGE = (
-    "No se encuentra este nombre, diríjase hacia otro tótem."
+SPECIAL_GUEST_FALLBACK_NAMES = (
+    "Facundo Guzman",
+    "Gesica Pieditorti",
 )
 
 
@@ -160,9 +154,9 @@ def _default_empresa_codigo() -> str:
     ) or "DEFAULT"
 
 
-def _massey_totem_id() -> str:
-    raw = str(getattr(settings, "KIOSK_TOTEM_ID_MASSEY", "TOTEM_MASSEY")).strip().upper()
-    return raw or "TOTEM_MASSEY"
+def _default_totem_id() -> str:
+    raw = str(getattr(settings, "DEFAULT_TOTEM_ID", "TOTEM_FENDT")).strip().upper()
+    return raw or "TOTEM_FENDT"
 
 
 def _support_reprint_pin() -> str:
@@ -171,29 +165,19 @@ def _support_reprint_pin() -> str:
     return digits_only or "4832"
 
 
-def _normalizar_credencial(raw_credencial: str) -> str:
-    return "".join(ch for ch in normalizar_texto(raw_credencial) if ch.isalnum())
+def _special_guest_names() -> set[str]:
+    configured = getattr(settings, "KIOSK_SPECIAL_GUEST_NAMES", None)
+    raw_names = configured or SPECIAL_GUEST_FALLBACK_NAMES
+    return {
+        normalizar_texto(name)
+        for name in raw_names
+        if str(name or "").strip()
+    }
 
 
-def _persona_habilitada_para_totem(*, persona: Persona, totem_id: str) -> bool:
-    if str(totem_id or "").strip().upper() != _massey_totem_id():
-        return True
-
-    credencial = _normalizar_credencial(persona.credencial)
-    return credencial in MASSEY_CREDENCIALES_PERMITIDAS
-
-
-def _validar_persona_habilitada_para_totem(*, persona: Persona, totem_id: str) -> None:
-    if _persona_habilitada_para_totem(persona=persona, totem_id=totem_id):
-        return
-    raise PersonaNoEncontradaError(
-        MASSEY_ACCESS_DENIED_MESSAGE,
-        details={
-            "totem_id": totem_id,
-            "documento": persona.dni,
-            "credencial": persona.credencial,
-        },
-    )
+def _normalizar_scope_codigo(raw_value: str | None) -> str:
+    cleaned = normalizar_codigo_empresa(raw_value or "")
+    return cleaned[: PoolDiario._meta.get_field("scope_codigo").max_length]
 
 
 def _validar_pin_soporte(pin: str) -> None:
@@ -207,7 +191,7 @@ def _persona_puede_invitar_en_comida(*, persona: Persona, comida_codigo: str) ->
         return False
     if bool(persona.puede_invitar):
         return True
-    return normalizar_texto(persona.nombre_apellido) in INVITADOS_AUTORIZADOS_FIJOS
+    return normalizar_texto(persona.nombre_apellido) in _special_guest_names()
 
 
 def _ensure_default_empresa() -> Empresa:
@@ -273,16 +257,49 @@ def _resolve_empresa(*, empresa_codigo: str | None, totem_id: str | None) -> Emp
     return _ensure_default_empresa()
 
 
-def _pool_default_stock(codigo: str) -> int:
+def _pool_scope_codigo(totem_id: str | None) -> str:
+    return _normalizar_scope_codigo(totem_id or _default_totem_id()) or _default_totem_id()
+
+
+def _pool_codigo_base(codigo: str) -> str:
+    pool_by_codigo = {
+        VoucherTipo.DESAYUNO: VoucherTipo.DESAYUNO,
+        VoucherTipo.ALMUERZO: VoucherTipo.ALMUERZO,
+        VoucherTipo.INVITADO_DESAYUNO: VoucherTipo.DESAYUNO,
+        VoucherTipo.INVITADO_ALMUERZO: VoucherTipo.ALMUERZO,
+    }
+    if codigo not in pool_by_codigo:
+        raise VoucherInvalidoError("No existe configuracion de pool para ese codigo.")
+    return pool_by_codigo[codigo]
+
+
+def _pool_default_stock(*, codigo: str, totem_id: str | None) -> int:
+    comida_codigo = _pool_codigo_base(codigo)
+    normalized_totem_id = str(totem_id or "").strip().upper()
+
+    per_totem = {
+        str(getattr(settings, "KIOSK_TOTEM_ID_VALTRA", "TOTEM_VALTRA")).strip().upper(): {
+            VoucherTipo.DESAYUNO: settings.POOL_STOCK_TOTEM_VALTRA_DESAYUNO,
+            VoucherTipo.ALMUERZO: settings.POOL_STOCK_TOTEM_VALTRA_ALMUERZO,
+        },
+        str(getattr(settings, "KIOSK_TOTEM_ID_FENDT", "TOTEM_FENDT")).strip().upper(): {
+            VoucherTipo.DESAYUNO: settings.POOL_STOCK_TOTEM_FENDT_DESAYUNO,
+            VoucherTipo.ALMUERZO: settings.POOL_STOCK_TOTEM_FENDT_ALMUERZO,
+        },
+        str(getattr(settings, "KIOSK_TOTEM_ID_MASSEY", "TOTEM_MASSEY")).strip().upper(): {
+            VoucherTipo.DESAYUNO: settings.POOL_STOCK_TOTEM_MASSEY_DESAYUNO,
+            VoucherTipo.ALMUERZO: settings.POOL_STOCK_TOTEM_MASSEY_ALMUERZO,
+        },
+    }
+    scoped_defaults = per_totem.get(normalized_totem_id or _default_totem_id(), {})
+    if comida_codigo in scoped_defaults:
+        return int(scoped_defaults[comida_codigo])
+
     default_by_codigo = {
         VoucherTipo.DESAYUNO: settings.POOL_STOCK_FIJOS_DESAYUNO,
         VoucherTipo.ALMUERZO: settings.POOL_STOCK_FIJOS_ALMUERZO,
-        VoucherTipo.INVITADO_DESAYUNO: settings.POOL_STOCK_INVITADOS_DESAYUNO,
-        VoucherTipo.INVITADO_ALMUERZO: settings.POOL_STOCK_INVITADOS_ALMUERZO,
     }
-    if codigo not in default_by_codigo:
-        raise VoucherInvalidoError("No existe configuracion de pool para ese codigo.")
-    return int(default_by_codigo[codigo])
+    return int(default_by_codigo[comida_codigo])
 
 
 def _parse_non_negative_int(value: Any, *, field_name: str) -> int:
@@ -384,28 +401,37 @@ def _get_or_create_cupo_diario_lock(
 
 
 def _get_or_create_pool_diario_lock(
-    *, empresa: Empresa, codigo: str, dia: date
+    *,
+    empresa: Empresa,
+    codigo: str,
+    dia: date,
+    totem_id: str | None,
 ) -> PoolDiario:
+    scope_codigo = _pool_scope_codigo(totem_id)
+    pool_codigo = _pool_codigo_base(codigo)
     try:
         return PoolDiario.objects.select_for_update().get(
             empresa=empresa,
-            codigo=codigo,
+            scope_codigo=scope_codigo,
+            codigo=pool_codigo,
             dia=dia,
         )
     except PoolDiario.DoesNotExist:
         try:
             PoolDiario.objects.create(
                 empresa=empresa,
-                codigo=codigo,
+                scope_codigo=scope_codigo,
+                codigo=pool_codigo,
                 dia=dia,
-                stock_total=_pool_default_stock(codigo),
+                stock_total=_pool_default_stock(codigo=codigo, totem_id=totem_id),
                 usados=0,
             )
         except IntegrityError:
             pass
         return PoolDiario.objects.select_for_update().get(
             empresa=empresa,
-            codigo=codigo,
+            scope_codigo=scope_codigo,
+            codigo=pool_codigo,
             dia=dia,
         )
 
@@ -458,7 +484,7 @@ def _create_ticket_with_retries(
     return ticket
 
 
-def _build_comidas_estado(*, persona: Persona, dia: date) -> list[ComidaEstado]:
+def _build_comidas_estado(*, persona: Persona, dia: date, totem_id: str | None) -> list[ComidaEstado]:
     vouchers = _load_required_vouchers()
     cupos = {
         cupo.voucher_tipo.codigo: cupo.usados
@@ -472,8 +498,9 @@ def _build_comidas_estado(*, persona: Persona, dia: date) -> list[ComidaEstado]:
         pool.codigo: pool
         for pool in PoolDiario.objects.filter(
             empresa=persona.empresa,
+            scope_codigo=_pool_scope_codigo(totem_id),
             dia=dia,
-            codigo__in=_required_voucher_codes(),
+            codigo__in=COMIDAS,
         )
     }
     labels = dict(VoucherTipo.CODIGOS)
@@ -482,7 +509,6 @@ def _build_comidas_estado(*, persona: Persona, dia: date) -> list[ComidaEstado]:
     for comida_codigo in COMIDAS:
         invitado_codigo = INVITADO_POR_COMIDA[comida_codigo]
         comida_pool = pools.get(comida_codigo)
-        invitados_pool = pools.get(invitado_codigo)
         invitados_habilitados = _persona_puede_invitar_en_comida(
             persona=persona,
             comida_codigo=comida_codigo,
@@ -508,18 +534,20 @@ def _build_comidas_estado(*, persona: Persona, dia: date) -> list[ComidaEstado]:
                 stock_fijos_total=(
                     comida_pool.stock_total
                     if comida_pool
-                    else _pool_default_stock(comida_codigo)
+                    else _pool_default_stock(codigo=comida_codigo, totem_id=totem_id)
                 ),
                 stock_fijos_usados=comida_pool.usados if comida_pool else 0,
                 stock_invitados_total=(
-                    INVITADOS_ILIMITADOS_SOFT_MAX_UI
-                    if invitados_ilimitados
+                    (
+                        comida_pool.stock_total
+                        if comida_pool
+                        else _pool_default_stock(codigo=invitado_codigo, totem_id=totem_id)
+                    )
+                    if invitados_habilitados
                     else 0
                 ),
                 stock_invitados_usados=(
-                    0
-                    if invitados_ilimitados or not invitados_habilitados
-                    else (invitados_pool.usados if invitados_pool else 0)
+                    comida_pool.usados if invitados_habilitados and comida_pool else 0
                 ),
             )
         )
@@ -538,10 +566,10 @@ def lookup_persona_cupos(
         raise PersonaNoEncontradaError("Debe ingresar un documento valido.")
 
     dia = dia or _hoy()
-    empresa = _resolve_empresa(empresa_codigo=empresa_codigo, totem_id=totem_id)
+    cleaned_totem_id = str(totem_id or "").strip() or _default_totem_id()
+    empresa = _resolve_empresa(empresa_codigo=empresa_codigo, totem_id=cleaned_totem_id)
     persona = _get_persona(empresa=empresa, dni=normalized_dni, lock=False)
-    _validar_persona_habilitada_para_totem(persona=persona, totem_id=totem_id or "")
-    comidas = _build_comidas_estado(persona=persona, dia=dia)
+    comidas = _build_comidas_estado(persona=persona, dia=dia, totem_id=cleaned_totem_id)
 
     comidas_payload = [
         {
@@ -708,8 +736,8 @@ def _redeem_comida_locked(
             "Debe canjear el voucher propio o emitir al menos un invitado."
         )
 
+    solicitados_pool = (1 if canjear_propio else 0) + invitados
     cupo_fijo: CupoDiario | None = None
-    pool_fijo: PoolDiario | None = None
     if canjear_propio:
         cupo_fijo = _get_or_create_cupo_diario_lock(
             persona=persona,
@@ -727,25 +755,7 @@ def _redeem_comida_locked(
                 },
             )
 
-        pool_fijo = _get_or_create_pool_diario_lock(
-            empresa=empresa,
-            codigo=comida_codigo,
-            dia=dia,
-        )
-        if pool_fijo.usados + 1 > pool_fijo.stock_total:
-            raise StockAgotadoError(
-                f"Stock agotado para {comida_codigo}.",
-                details={
-                    "tipo": "pool_fijos",
-                    "codigo": comida_codigo,
-                    "stock_total": pool_fijo.stock_total,
-                    "usados": pool_fijo.usados,
-                    "solicitados": 1,
-                },
-            )
-
     cupo_invitado: CupoDiario | None = None
-    pool_invitado: PoolDiario | None = None
     if invitados > 0:
         cupo_invitado = _get_or_create_cupo_diario_lock(
             persona=persona,
@@ -767,31 +777,29 @@ def _redeem_comida_locked(
                     },
                 )
 
-            pool_invitado = _get_or_create_pool_diario_lock(
-                empresa=empresa,
-                codigo=invitado_codigo,
-                dia=dia,
-            )
-            if pool_invitado.usados + invitados > pool_invitado.stock_total:
-                raise StockAgotadoError(
-                    f"Stock de invitados agotado para {comida_codigo}.",
-                    details={
-                        "tipo": "pool_invitados",
-                        "codigo": comida_codigo,
-                        "stock_total": pool_invitado.stock_total,
-                        "usados": pool_invitado.usados,
-                        "solicitados": invitados,
-                        "disponibles": max(pool_invitado.stock_total - pool_invitado.usados, 0),
-                    },
-                )
+    pool_comida = _get_or_create_pool_diario_lock(
+        empresa=empresa,
+        codigo=comida_codigo,
+        dia=dia,
+        totem_id=totem_id,
+    )
+    if pool_comida.usados + solicitados_pool > pool_comida.stock_total:
+        raise StockAgotadoError(
+            f"Stock agotado para {comida_codigo}.",
+            details={
+                "tipo": "pool_comida",
+                "codigo": comida_codigo,
+                "stock_total": pool_comida.stock_total,
+                "usados": pool_comida.usados,
+                "solicitados": solicitados_pool,
+                "disponibles": max(pool_comida.stock_total - pool_comida.usados, 0),
+            },
+        )
 
     tickets: list[Ticket] = []
-    if canjear_propio and cupo_fijo and pool_fijo:
+    if canjear_propio and cupo_fijo:
         cupo_fijo.usados += 1
         cupo_fijo.save(update_fields=["usados", "actualizado_en"])
-
-        pool_fijo.usados += 1
-        pool_fijo.save(update_fields=["usados", "actualizado_en"])
 
         tickets.append(
             _create_ticket_with_retries(
@@ -803,24 +811,7 @@ def _redeem_comida_locked(
             )
         )
 
-    if invitados > 0 and cupo_invitado and pool_invitado:
-        cupo_invitado.usados += invitados
-        cupo_invitado.save(update_fields=["usados", "actualizado_en"])
-
-        pool_invitado.usados += invitados
-        pool_invitado.save(update_fields=["usados", "actualizado_en"])
-
-        for _ in range(invitados):
-            tickets.append(
-                _create_ticket_with_retries(
-                    persona=persona,
-                    voucher_tipo=voucher_invitado,
-                    operacion=operacion,
-                    dia=dia,
-                    totem_id=totem_id,
-                )
-            )
-    elif invitados > 0 and cupo_invitado and invitados_ilimitados_persona:
+    if invitados > 0 and cupo_invitado:
         cupo_invitado.usados += invitados
         cupo_invitado.save(update_fields=["usados", "actualizado_en"])
 
@@ -834,6 +825,10 @@ def _redeem_comida_locked(
                     totem_id=totem_id,
                 )
             )
+
+    if solicitados_pool > 0:
+        pool_comida.usados += solicitados_pool
+        pool_comida.save(update_fields=["usados", "actualizado_en"])
 
     return tickets
 
@@ -850,6 +845,7 @@ def redeem_vouchers_batch(
     if not normalized_dni:
         raise PersonaNoEncontradaError("Debe ingresar un documento valido.")
 
+    cleaned_totem_id = str(totem_id or "").strip() or _default_totem_id()
     dia = dia or _hoy()
     normalized_items = normalizar_redeem_batch_items(items)
     if not normalized_items:
@@ -858,13 +854,12 @@ def redeem_vouchers_batch(
     voucher_map = _load_required_vouchers()
 
     with transaction.atomic():
-        empresa = _resolve_empresa(empresa_codigo=empresa_codigo, totem_id=totem_id)
+        empresa = _resolve_empresa(empresa_codigo=empresa_codigo, totem_id=cleaned_totem_id)
         persona = _get_persona(empresa=empresa, dni=normalized_dni, lock=True)
-        _validar_persona_habilitada_para_totem(persona=persona, totem_id=totem_id or "")
         operacion = CanjeOperacion.objects.create(
             persona=persona,
             dia=dia,
-            totem_id=totem_id,
+            totem_id=cleaned_totem_id,
         )
         tickets: list[Ticket] = []
         for comida_codigo, canjear_propio, invitados in normalized_items:
@@ -882,7 +877,7 @@ def redeem_vouchers_batch(
                     invitados=invitados,
                     voucher_map=voucher_map,
                     operacion=operacion,
-                    totem_id=totem_id,
+                    totem_id=cleaned_totem_id,
                     dia=dia,
                 )
             )
@@ -892,7 +887,7 @@ def redeem_vouchers_batch(
         operacion.id,
         normalized_dni,
         dia.isoformat(),
-        totem_id,
+        cleaned_totem_id,
         len(tickets),
     )
     return tickets
@@ -936,14 +931,11 @@ def obtener_tickets_ultimo_canje(
 
     _validar_pin_soporte(pin)
 
-    cleaned_totem_id = str(totem_id or "").strip() or str(settings.DEFAULT_TOTEM_ID).strip()
-    if not cleaned_totem_id:
-        cleaned_totem_id = "TOTEM_FENDT"
+    cleaned_totem_id = str(totem_id or "").strip() or _default_totem_id()
 
     dia = dia or _hoy()
     empresa = _resolve_empresa(empresa_codigo=empresa_codigo, totem_id=cleaned_totem_id)
     persona = _get_persona(empresa=empresa, dni=normalized_dni, lock=False)
-    _validar_persona_habilitada_para_totem(persona=persona, totem_id=cleaned_totem_id)
 
     operacion = (
         CanjeOperacion.objects.filter(
@@ -1029,8 +1021,8 @@ def reporte_tickets_diario(
             dia=dia,
             **({"empresa": empresa} if empresa else {}),
         )
-        .values("codigo", "stock_total", "usados")
-        .order_by("codigo")
+        .values("scope_codigo", "codigo", "stock_total", "usados")
+        .order_by("scope_codigo", "codigo")
     )
 
     return {
@@ -1059,6 +1051,7 @@ def reporte_tickets_diario(
         ],
         "pools": [
             {
+                "scope_codigo": row["scope_codigo"],
                 "codigo": row["codigo"],
                 "stock_total": row["stock_total"],
                 "usados": row["usados"],

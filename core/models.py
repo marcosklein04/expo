@@ -241,6 +241,7 @@ class PoolDiario(models.Model):
         on_delete=models.PROTECT,
         related_name="pools_diarios",
     )
+    scope_codigo = models.CharField(max_length=50, blank=True, default="", db_index=True)
     codigo = models.CharField(max_length=24, choices=CODIGOS)
     dia = models.DateField()
     stock_total = models.PositiveIntegerField(validators=[MinValueValidator(1)])
@@ -248,18 +249,25 @@ class PoolDiario(models.Model):
     actualizado_en = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["-dia", "empresa_id", "codigo"]
+        ordering = ["-dia", "empresa_id", "scope_codigo", "codigo"]
         constraints = [
             UniqueConstraint(
-                fields=["empresa", "dia", "codigo"],
-                name="uq_pool_diario_empresa_dia_codigo",
+                fields=["empresa", "scope_codigo", "dia", "codigo"],
+                name="uq_pool_emp_scope_dia_cod",
             ),
             CheckConstraint(condition=Q(stock_total__gte=1), name="ck_pool_diario_stock_gte_1"),
             CheckConstraint(condition=Q(usados__gte=0), name="ck_pool_diario_usados_gte_0"),
         ]
         indexes = [
-            models.Index(fields=["empresa", "dia", "codigo"], name="idx_pool_diario_emp_dia_codigo"),
+            models.Index(
+                fields=["empresa", "scope_codigo", "dia", "codigo"],
+                name="idx_pool_emp_scope_dia_cod",
+            ),
         ]
 
     def __str__(self) -> str:
-        return f"{self.empresa.codigo} {self.codigo} {self.dia} {self.usados}/{self.stock_total}"
+        scope = self.scope_codigo or "GLOBAL"
+        return (
+            f"{self.empresa.codigo} {scope} {self.codigo} "
+            f"{self.dia} {self.usados}/{self.stock_total}"
+        )

@@ -7,17 +7,15 @@ from core.services import normalizar_dni
 
 
 class PersonaRegistroForm(forms.ModelForm):
-    CREDENCIAL_VALTRA = "Valtra"
-    CREDENCIAL_AGCO = "AGCO"
-    CREDENCIAL_CHOICES = (
-        (CREDENCIAL_VALTRA, "Valtra"),
-        (CREDENCIAL_AGCO, "AGCO"),
+    PADRON_VALTRA_FENDT = "VALTRA_FENDT"
+    PADRON_MASSEY = "MASSEY"
+    PADRON_CHOICES = (
+        (PADRON_VALTRA_FENDT, "Totems Valtra/Fendt"),
+        (PADRON_MASSEY, "Totem Massey"),
     )
 
-    credencial = forms.ChoiceField(
-        choices=CREDENCIAL_CHOICES,
-        label="Credencial",
-    )
+    padron_destino = forms.ChoiceField(choices=PADRON_CHOICES, label="Padrón destino")
+    credencial = forms.CharField(required=False, label="Credencial")
 
     class Meta:
         model = Persona
@@ -39,6 +37,7 @@ class PersonaRegistroForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["padron_destino"].widget.attrs.update({"class": "form-select"})
         self.fields["dni"].widget.attrs.update(
             {
                 "class": "form-control",
@@ -60,7 +59,13 @@ class PersonaRegistroForm(forms.ModelForm):
                 "autocomplete": "off",
             }
         )
-        self.fields["credencial"].widget.attrs.update({"class": "form-select"})
+        self.fields["credencial"].widget.attrs.update(
+            {
+                "class": "form-control",
+                "placeholder": "Credencial o marca",
+                "autocomplete": "off",
+            }
+        )
         self.fields["tipo_vianda"].widget.attrs.update({"class": "form-select"})
         self.fields["puede_invitar"].widget.attrs.update({"class": "form-check-input"})
         self.fields["activo"].widget.attrs.update({"class": "form-check-input"})

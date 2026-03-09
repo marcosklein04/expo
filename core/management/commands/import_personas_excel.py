@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
 import unicodedata
 
@@ -8,7 +9,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import IntegrityError
 
 from core.models import Empresa, Persona
-from core.services import normalizar_codigo_empresa, normalizar_dni
+from core.services import normalizar_codigo_empresa, normalizar_dni, normalizar_texto
 
 try:
     from openpyxl import load_workbook
@@ -26,6 +27,8 @@ COLUMN_ALIASES = {
     "concesionario": "concesionario",
     "credencial": "credencial",
     "tipo de vianda": "tipo_vianda",
+    "menu": "tipo_vianda",
+    "menú": "tipo_vianda",
     "vianda": "tipo_vianda",
     "puede invitar": "puede_invitar",
     "invitar": "puede_invitar",
@@ -33,6 +36,9 @@ COLUMN_ALIASES = {
     "invitaciones": "puede_invitar",
 }
 REQUIRED_FIELDS = {"dni", "nombre_apellido"}
+LAYOUT_AUTO = "auto"
+LAYOUT_DNI = "dni"
+LAYOUT_VALTRA_FENDT = "valtra_fendt"
 
 
 def _normalize_header(value: object) -> str:
@@ -66,6 +72,15 @@ def _cell_to_vianda(value: object) -> str:
     return Persona.VIANDA_CLASICO
 
 
+def _special_guest_names() -> set[str]:
+    raw_names = getattr(settings, "KIOSK_SPECIAL_GUEST_NAMES", []) or []
+    return {normalizar_texto(name) for name in raw_names if str(name or "").strip()}
+
+
+def _should_enable_guests(nombre_apellido: str) -> bool:
+    return normalizar_texto(nombre_apellido) in _special_guest_names()
+
+
 def _find_header_row(worksheet) -> tuple[int, dict[str, int]]:
     for row_index, row in enumerate(worksheet.iter_rows(values_only=True), start=1):
         header_map: dict[str, int] = {}
@@ -83,6 +98,198 @@ def _find_header_row(worksheet) -> tuple[int, dict[str, int]]:
     raise CommandError(
         "No se encontro una fila de cabecera valida. Debe incluir al menos DNI y Nombre y Apellido."
     )
+
+
+def _detect_layout(worksheet) -> str:
+    try:
+        _find_header_row(worksheet)
+        return LAYOUT_DNI
+    except CommandError:
+        pass
+
+    for row in worksheet.iter_rows(min_row=1, max_row=6, values_only=True):
+        normalized = [_normalize_header(value) for value in row]
+        if "credencial" in normalized and "nombre" in normalized and "apellido" in normalized:
+            return LAYOUT_VALTRA_FENDT
+
+    raise CommandError("No se pudo detectar automaticamente el layout del Excel.")
+
+
+def _resolve_empresa(*, empresa_code: str | None, empresa_name: str | None) -> tuple[Empresa, bool]:
+    raw_empresa_code = empresa_code or getattr(settings, "DEFAULT_EMPRESA_CODE", "DEFAULT")
+    codigo = normalizar_codigo_empresa(str(raw_empresa_code)) or "DEFAULT"
+    nombre = str(empresa_name or codigo).strip() or codigo
+
+    empresa, created = Empresa.objects.get_or_create(
+        codigo=codigo,
+        defaults={"nombre": nombre, "activo": True},
+    )
+    if empresa.nombre != nombre:
+        empresa.nombre = nombre
+        empresa.save(update_fields=["nombre", "actualizado_en"])
+    if not empresa.activo:
+        empresa.activo = True
+        empresa.save(update_fields=["activo", "actualizado_en"])
+    return empresa, created
+
+
+def _save_persona_with_dni(
+    *,
+    empresa: Empresa,
+    dni: str,
+    defaults: dict[str, object],
+) -> tuple[Persona, bool, bool]:
+    obj = Persona.objects.filter(empresa=empresa, dni=dni).first()
+    was_created = False
+    relinked_document = False
+    nombre_apellido = str(defaults["nombre_apellido"])
+    concesionario = str(defaults.get("concesionario", "") or "")
+    credencial = str(defaults.get("credencial", "") or "")
+
+    if obj is None and any(ch.isalpha() for ch in dni):
+        candidate_qs = Persona.objects.filter(
+            empresa=empresa,
+            nombre_apellido=nombre_apellido,
+            activo=True,
+        )
+        if concesionario:
+            candidate_qs = candidate_qs.filter(concesionario=concesionario)
+        if credencial:
+            candidate_qs = candidate_qs.filter(credencial=credencial)
+
+        if candidate_qs.count() == 1:
+            candidate = candidate_qs.first()
+            if candidate and candidate.dni.isdigit():
+                candidate.dni = dni
+                for field, value in defaults.items():
+                    setattr(candidate, field, value)
+                try:
+                    candidate.save()
+                    obj = candidate
+                    relinked_document = True
+                except IntegrityError:
+                    obj = None
+
+    if obj is None:
+        obj = Persona.objects.create(empresa=empresa, dni=dni, **defaults)
+        was_created = True
+    else:
+        update_fields = ["activo", "actualizado_en"]
+        for field, value in defaults.items():
+            setattr(obj, field, value)
+            update_fields.append(field)
+        obj.save(update_fields=sorted(set(update_fields)))
+
+    return obj, was_created, relinked_document
+
+
+def _iter_header_rows(worksheet, *, header_row: int, header_map: dict[str, int]) -> Iterable[dict[str, object]]:
+    for row in worksheet.iter_rows(min_row=header_row + 1, values_only=True):
+        raw_dni = _cell_to_text(row[header_map["dni"]])
+        dni = normalizar_dni(raw_dni)
+        nombre_apellido = _cell_to_text(row[header_map["nombre_apellido"]])
+        if not dni or not nombre_apellido:
+            yield {"skip": True}
+            continue
+
+        concesionario = _cell_to_text(row[header_map["concesionario"]]) if "concesionario" in header_map else ""
+        credencial = _cell_to_text(row[header_map["credencial"]]) if "credencial" in header_map else ""
+        puede_invitar = (
+            _cell_to_bool(row[header_map["puede_invitar"]])
+            if "puede_invitar" in header_map
+            else _should_enable_guests(nombre_apellido)
+        )
+        tipo_vianda = (
+            _cell_to_vianda(row[header_map["tipo_vianda"]])
+            if "tipo_vianda" in header_map
+            else Persona.VIANDA_CLASICO
+        )
+        yield {
+            "dni": dni,
+            "nombre_apellido": nombre_apellido,
+            "concesionario": concesionario,
+            "credencial": credencial,
+            "tipo_vianda": tipo_vianda,
+            "puede_invitar": puede_invitar,
+            "activo": True,
+        }
+
+
+def _iter_valtra_fendt_rows(worksheet) -> Iterable[dict[str, object]]:
+    current_concesionario = ""
+    current_credencial = ""
+
+    for row_idx, row in enumerate(worksheet.iter_rows(values_only=True), start=1):
+        if row_idx < 6:
+            continue
+
+        concesionario = _cell_to_text(row[1] if len(row) > 1 else "")
+        credencial = _cell_to_text(row[3] if len(row) > 3 else "")
+        nombre = _cell_to_text(row[4] if len(row) > 4 else "")
+        apellido = _cell_to_text(row[5] if len(row) > 5 else "")
+        if concesionario:
+            current_concesionario = concesionario
+        if credencial:
+            current_credencial = credencial
+
+        nombre_apellido = " ".join(part for part in [nombre, apellido] if part).strip()
+        if not nombre_apellido:
+            continue
+
+        dias = [
+            _cell_to_text(row[index] if len(row) > index else "")
+            for index in (8, 9, 10, 11, 12)
+        ]
+        activo = any(value not in {"", "0"} for value in dias)
+
+        yield {
+            "row_idx": row_idx,
+            "nombre_apellido": nombre_apellido,
+            "concesionario": current_concesionario,
+            "credencial": current_credencial,
+            "tipo_vianda": _cell_to_vianda(row[7] if len(row) > 7 else ""),
+            "puede_invitar": _should_enable_guests(nombre_apellido),
+            "activo": activo,
+        }
+
+
+def _match_persona_by_name(
+    *,
+    empresa: Empresa,
+    nombre_apellido: str,
+    concesionario: str,
+    credencial: str,
+) -> Persona | None:
+    normalized_name = normalizar_texto(nombre_apellido)
+    candidates = [
+        persona
+        for persona in Persona.objects.filter(empresa=empresa)
+        if normalizar_texto(persona.nombre_apellido) == normalized_name
+    ]
+    if len(candidates) == 1:
+        return candidates[0]
+
+    if credencial:
+        normalized_credencial = normalizar_texto(credencial)
+        candidates = [
+            persona
+            for persona in candidates
+            if normalizar_texto(persona.credencial) == normalized_credencial
+        ]
+    if len(candidates) == 1:
+        return candidates[0]
+
+    if concesionario:
+        normalized_concesionario = normalizar_texto(concesionario)
+        candidates = [
+            persona
+            for persona in candidates
+            if normalizar_texto(persona.concesionario) == normalized_concesionario
+        ]
+    if len(candidates) == 1:
+        return candidates[0]
+
+    return None
 
 
 class Command(BaseCommand):
@@ -108,6 +315,13 @@ class Command(BaseCommand):
             default=None,
             help="Nombre de empresa (solo se usa al crear la empresa).",
         )
+        parser.add_argument(
+            "--layout",
+            type=str,
+            choices=[LAYOUT_AUTO, LAYOUT_DNI, LAYOUT_VALTRA_FENDT],
+            default=LAYOUT_AUTO,
+            help="Fuerza el parser a usar un layout especifico.",
+        )
 
     def handle(self, *args, **options):
         xlsx_path = Path(options["xlsx_path"])
@@ -116,115 +330,55 @@ class Command(BaseCommand):
 
         workbook = load_workbook(filename=xlsx_path, read_only=True, data_only=True)
         worksheet = workbook[options["sheet"]] if options["sheet"] else workbook.active
-
-        raw_empresa_code = (
-            options["empresa_code"] or getattr(settings, "DEFAULT_EMPRESA_CODE", "DEFAULT")
+        empresa, empresa_created = _resolve_empresa(
+            empresa_code=options["empresa_code"],
+            empresa_name=options["empresa_name"],
         )
-        empresa_code = normalizar_codigo_empresa(str(raw_empresa_code)) or "DEFAULT"
-        empresa_name = str(options["empresa_name"] or empresa_code).strip() or empresa_code
-        empresa, empresa_created = Empresa.objects.get_or_create(
-            codigo=empresa_code,
-            defaults={"nombre": empresa_name, "activo": True},
-        )
-        if empresa.nombre != empresa_name:
-            empresa.nombre = empresa_name
-            empresa.save(update_fields=["nombre", "actualizado_en"])
-        if not empresa.activo:
-            empresa.activo = True
-            empresa.save(update_fields=["activo", "actualizado_en"])
-
         if empresa_created:
             self.stdout.write(
                 self.style.SUCCESS(f"Empresa creada: {empresa.codigo} ({empresa.nombre})")
             )
 
-        header_row, header_map = _find_header_row(worksheet)
+        layout = options["layout"]
+        if layout == LAYOUT_AUTO:
+            layout = _detect_layout(worksheet)
+            self.stdout.write(self.style.WARNING(f"Layout detectado: {layout}"))
 
+        if layout == LAYOUT_DNI:
+            self._import_layout_with_dni(empresa=empresa, worksheet=worksheet)
+            return
+        if layout == LAYOUT_VALTRA_FENDT:
+            self._import_valtra_fendt_layout(empresa=empresa, worksheet=worksheet)
+            return
+
+        raise CommandError(f"Layout no soportado: {layout}")
+
+    def _import_layout_with_dni(self, *, empresa: Empresa, worksheet) -> None:
+        header_row, header_map = _find_header_row(worksheet)
         created = 0
         updated = 0
         relinked = 0
         skipped_empty = 0
 
-        for row in worksheet.iter_rows(min_row=header_row + 1, values_only=True):
-            raw_dni = _cell_to_text(row[header_map["dni"]])
-            dni = normalizar_dni(raw_dni)
-            if not dni:
+        for record in _iter_header_rows(worksheet, header_row=header_row, header_map=header_map):
+            if record.get("skip"):
                 skipped_empty += 1
                 continue
 
-            nombre_apellido = _cell_to_text(row[header_map["nombre_apellido"]])
-            if not nombre_apellido:
-                skipped_empty += 1
-                continue
-
-            concesionario = ""
-            if "concesionario" in header_map:
-                concesionario = _cell_to_text(row[header_map["concesionario"]])
-
-            credencial = ""
-            if "credencial" in header_map:
-                credencial = _cell_to_text(row[header_map["credencial"]])
-
+            dni = str(record["dni"])
             defaults = {
-                "nombre_apellido": nombre_apellido,
-                "concesionario": concesionario,
-                "credencial": credencial,
-                "tipo_vianda": Persona.VIANDA_CLASICO,
-                "activo": True,
+                "nombre_apellido": record["nombre_apellido"],
+                "concesionario": record["concesionario"],
+                "credencial": record["credencial"],
+                "tipo_vianda": record["tipo_vianda"],
+                "puede_invitar": record["puede_invitar"],
+                "activo": record["activo"],
             }
-            if "tipo_vianda" in header_map:
-                defaults["tipo_vianda"] = _cell_to_vianda(row[header_map["tipo_vianda"]])
-            puede_invitar: bool | None = None
-            if "puede_invitar" in header_map:
-                puede_invitar = _cell_to_bool(row[header_map["puede_invitar"]])
-                defaults["puede_invitar"] = puede_invitar
-
-            obj = Persona.objects.filter(empresa=empresa, dni=dni).first()
-            was_created = False
-            relinked_document = False
-
-            # Fix historical imports where passport letters were stripped and only digits remained.
-            if obj is None and any(ch.isalpha() for ch in dni):
-                candidate_qs = Persona.objects.filter(
-                    empresa=empresa,
-                    nombre_apellido=nombre_apellido,
-                    activo=True,
-                )
-                if concesionario:
-                    candidate_qs = candidate_qs.filter(concesionario=concesionario)
-                if credencial:
-                    candidate_qs = candidate_qs.filter(credencial=credencial)
-
-                if candidate_qs.count() == 1:
-                    candidate = candidate_qs.first()
-                    if candidate and candidate.dni.isdigit():
-                        candidate.dni = dni
-                        for field, value in defaults.items():
-                            setattr(candidate, field, value)
-                        try:
-                            candidate.save()
-                            obj = candidate
-                            relinked_document = True
-                        except IntegrityError:
-                            obj = None
-
-            if obj is None:
-                obj = Persona.objects.create(empresa=empresa, dni=dni, **defaults)
-                was_created = True
-            else:
-                for field, value in defaults.items():
-                    setattr(obj, field, value)
-                obj.save(
-                    update_fields=[
-                        "nombre_apellido",
-                        "concesionario",
-                        "credencial",
-                        "tipo_vianda",
-                        *(["puede_invitar"] if puede_invitar is not None else []),
-                        "activo",
-                        "actualizado_en",
-                    ]
-                )
+            obj, was_created, relinked_document = _save_persona_with_dni(
+                empresa=empresa,
+                dni=dni,
+                defaults=defaults,
+            )
 
             if was_created:
                 created += 1
@@ -244,5 +398,74 @@ class Command(BaseCommand):
             self.style.SUCCESS(
                 f"Importacion finalizada para empresa={empresa.codigo}. "
                 f"creados={created} actualizados={updated} relinked={relinked} omitidos={skipped_empty}"
+            )
+        )
+
+    def _import_valtra_fendt_layout(self, *, empresa: Empresa, worksheet) -> None:
+        updated = 0
+        skipped_unmatched = 0
+        skipped_ambiguous = 0
+
+        for record in _iter_valtra_fendt_rows(worksheet):
+            persona = _match_persona_by_name(
+                empresa=empresa,
+                nombre_apellido=str(record["nombre_apellido"]),
+                concesionario=str(record["concesionario"]),
+                credencial=str(record["credencial"]),
+            )
+            if persona is None:
+                normalized_name = normalizar_texto(str(record["nombre_apellido"]))
+                duplicates = [
+                    obj
+                    for obj in Persona.objects.filter(empresa=empresa)
+                    if normalizar_texto(obj.nombre_apellido) == normalized_name
+                ]
+                if duplicates:
+                    skipped_ambiguous += 1
+                    self.stdout.write(
+                        self.style.WARNING(
+                            f"SKIP [{empresa.codigo}] fila={record['row_idx']} nombre={record['nombre_apellido']} "
+                            "coincidencia ambigua sin DNI."
+                        )
+                    )
+                else:
+                    skipped_unmatched += 1
+                    self.stdout.write(
+                        self.style.WARNING(
+                            f"SKIP [{empresa.codigo}] fila={record['row_idx']} nombre={record['nombre_apellido']} "
+                            "sin coincidencia previa por nombre. El Excel no trae DNI."
+                        )
+                    )
+                continue
+
+            persona.nombre_apellido = str(record["nombre_apellido"])
+            persona.concesionario = str(record["concesionario"])
+            persona.credencial = str(record["credencial"])
+            persona.tipo_vianda = str(record["tipo_vianda"])
+            persona.puede_invitar = bool(record["puede_invitar"])
+            persona.activo = bool(record["activo"])
+            persona.save(
+                update_fields=[
+                    "nombre_apellido",
+                    "concesionario",
+                    "credencial",
+                    "tipo_vianda",
+                    "puede_invitar",
+                    "activo",
+                    "actualizado_en",
+                ]
+            )
+            updated += 1
+            self.stdout.write(
+                f"OK [{empresa.codigo}] {persona.dni} | {persona.nombre_apellido} | "
+                f"{persona.concesionario} | {persona.credencial} | vianda={persona.tipo_vianda} | "
+                f"puede_invitar={persona.puede_invitar}"
+            )
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Importacion finalizada para empresa={empresa.codigo}. "
+                f"actualizados={updated} omitidos_sin_match={skipped_unmatched} "
+                f"omitidos_ambiguos={skipped_ambiguous}"
             )
         )

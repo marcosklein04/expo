@@ -217,9 +217,17 @@ class TicketAdmin(admin.ModelAdmin):
 
 @admin.register(PoolDiario)
 class PoolDiarioAdmin(admin.ModelAdmin):
-    list_display = ("empresa", "dia", "codigo", "stock_total", "usados", "actualizado_en")
-    list_filter = ("empresa", "dia", "codigo")
-    search_fields = ("empresa__codigo", "codigo")
+    list_display = (
+        "empresa",
+        "scope_codigo",
+        "dia",
+        "codigo",
+        "stock_total",
+        "usados",
+        "actualizado_en",
+    )
+    list_filter = ("empresa", "scope_codigo", "dia", "codigo")
+    search_fields = ("empresa__codigo", "scope_codigo", "codigo")
 
 
 class CanjeOperacionItemInline(admin.TabularInline):

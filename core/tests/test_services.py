@@ -19,7 +19,6 @@ from core.services import (
     CantidadInvalidaError,
     CupoAgotadoError,
     PinSoporteInvalidoError,
-    PersonaNoEncontradaError,
     StockAgotadoError,
     lookup_persona_cupos,
     obtener_tickets_ultimo_canje,
@@ -118,48 +117,49 @@ class VoucherServiceTests(TestCase):
         payload = lookup_persona_cupos(dni="ab-123456", totem_id="TOTEM-01")
         self.assertEqual(payload["persona"]["dni"], persona_pasaporte.dni)
 
-    @override_settings(KIOSK_TOTEM_ID_MASSEY="TOTEM-MASSEY")
-    def test_lookup_restricts_massey_totem_to_agco_credential(self):
-        persona_no_agco = Persona.objects.create(
-            empresa=self.empresa,
+    def test_lookup_uses_massey_company_without_credential_gate(self):
+        empresa_massey = Empresa.objects.create(codigo="MASSEY", nombre="Massey")
+        Totem.objects.update_or_create(
+            codigo="TOTEM-MASSEY",
+            defaults={"empresa": empresa_massey, "nombre": "Totem Massey"},
+        )
+        persona_massey = Persona.objects.create(
+            empresa=empresa_massey,
             dni="46660001",
-            nombre_apellido="Usuario No AGCO",
-            credencial="VALTRA",
-        )
-        persona_agco = Persona.objects.create(
-            empresa=self.empresa,
-            dni="46660002",
-            nombre_apellido="Usuario AGCO",
-            credencial="AGCO",
-        )
-
-        with self.assertRaises(PersonaNoEncontradaError):
-            lookup_persona_cupos(dni=persona_no_agco.dni, totem_id="TOTEM-MASSEY")
-
-        payload = lookup_persona_cupos(dni=persona_agco.dni, totem_id="TOTEM-MASSEY")
-        self.assertEqual(payload["persona"]["dni"], persona_agco.dni)
-
-    @override_settings(KIOSK_TOTEM_ID_MASSEY="TOTEM-MASSEY")
-    def test_redeem_blocks_massey_totem_for_non_agco_credential(self):
-        persona_no_agco = Persona.objects.create(
-            empresa=self.empresa,
-            dni="46660003",
-            nombre_apellido="Usuario Bloqueado",
+            nombre_apellido="Usuario Massey",
             credencial="STAFF",
         )
 
-        with self.assertRaises(PersonaNoEncontradaError):
-            redeem_vouchers_batch(
-                dni=persona_no_agco.dni,
-                totem_id="TOTEM-MASSEY",
-                items=[
-                    {
-                        "comida": VoucherTipo.DESAYUNO,
-                        "canjear_propio": True,
-                        "invitados": 0,
-                    }
-                ],
-            )
+        payload = lookup_persona_cupos(dni=persona_massey.dni, totem_id="TOTEM-MASSEY")
+        self.assertEqual(payload["empresa"]["codigo"], empresa_massey.codigo)
+        self.assertEqual(payload["persona"]["dni"], persona_massey.dni)
+
+    def test_redeem_uses_massey_company_without_credential_gate(self):
+        empresa_massey = Empresa.objects.create(codigo="MASSEY", nombre="Massey")
+        Totem.objects.update_or_create(
+            codigo="TOTEM-MASSEY",
+            defaults={"empresa": empresa_massey, "nombre": "Totem Massey"},
+        )
+        persona_massey = Persona.objects.create(
+            empresa=empresa_massey,
+            dni="46660003",
+            nombre_apellido="Usuario Massey Canje",
+            credencial="STAFF",
+        )
+
+        tickets = redeem_vouchers_batch(
+            dni=persona_massey.dni,
+            totem_id="TOTEM-MASSEY",
+            items=[
+                {
+                    "comida": VoucherTipo.DESAYUNO,
+                    "canjear_propio": True,
+                    "invitados": 0,
+                }
+            ],
+        )
+        self.assertEqual(len(tickets), 1)
+        self.assertEqual(tickets[0].persona.empresa_id, empresa_massey.id)
 
     def test_redeem_batch_allows_guests_for_authorized_person_in_both_meals(self):
         tickets = redeem_vouchers_batch(
@@ -260,13 +260,88 @@ class VoucherServiceTests(TestCase):
             dia=timezone.localdate(),
         )
         self.assertEqual(cupo_desayuno_inv.usados, 12)
-        self.assertFalse(
-            PoolDiario.objects.filter(
-                empresa=self.empresa,
-                dia=timezone.localdate(),
-                codigo=VoucherTipo.INVITADO_DESAYUNO,
-            ).exists()
+        pool_desayuno = PoolDiario.objects.get(
+            empresa=self.empresa,
+            dia=timezone.localdate(),
+            scope_codigo="TOTEM-01",
+            codigo=VoucherTipo.DESAYUNO,
         )
+        self.assertEqual(pool_desayuno.usados, 12)
+
+    @override_settings(
+        KIOSK_TOTEM_ID_VALTRA="TOTEM-VALTRA",
+        KIOSK_TOTEM_ID_FENDT="TOTEM-FENDT",
+        POOL_STOCK_TOTEM_VALTRA_DESAYUNO=2,
+        POOL_STOCK_TOTEM_VALTRA_ALMUERZO=2,
+        POOL_STOCK_TOTEM_FENDT_DESAYUNO=1,
+        POOL_STOCK_TOTEM_FENDT_ALMUERZO=1,
+    )
+    def test_pool_is_scoped_per_totem_and_shared_by_own_and_guest_tickets(self):
+        Totem.objects.create(codigo="TOTEM-VALTRA", empresa=self.empresa, nombre="Totem Valtra")
+        Totem.objects.create(codigo="TOTEM-FENDT", empresa=self.empresa, nombre="Totem Fendt")
+        persona_valtra = Persona.objects.create(
+            empresa=self.empresa,
+            dni="50000001",
+            nombre_apellido="Gesica Pieditorti",
+            credencial="AGCO",
+            puede_invitar=True,
+        )
+        persona_fendt = Persona.objects.create(
+            empresa=self.empresa,
+            dni="50000002",
+            nombre_apellido="Usuario Fendt",
+            credencial="FENDT",
+        )
+
+        tickets = redeem_vouchers_batch(
+            dni=persona_valtra.dni,
+            totem_id="TOTEM-VALTRA",
+            items=[
+                {
+                    "comida": VoucherTipo.DESAYUNO,
+                    "canjear_propio": True,
+                    "invitados": 1,
+                }
+            ],
+        )
+        self.assertEqual(len(tickets), 2)
+
+        with self.assertRaises(StockAgotadoError):
+            redeem_vouchers_batch(
+                dni=persona_valtra.dni,
+                totem_id="TOTEM-VALTRA",
+                items=[
+                    {
+                        "comida": VoucherTipo.DESAYUNO,
+                        "canjear_propio": False,
+                        "invitados": 1,
+                    }
+                ],
+            )
+
+        ticket_fendt = redeem_voucher(
+            dni=persona_fendt.dni,
+            voucher_codigo=VoucherTipo.DESAYUNO,
+            totem_id="TOTEM-FENDT",
+        )
+        self.assertEqual(ticket_fendt.totem_id, "TOTEM-FENDT")
+
+        pool_valtra = PoolDiario.objects.get(
+            empresa=self.empresa,
+            scope_codigo="TOTEM-VALTRA",
+            dia=timezone.localdate(),
+            codigo=VoucherTipo.DESAYUNO,
+        )
+        pool_fendt = PoolDiario.objects.get(
+            empresa=self.empresa,
+            scope_codigo="TOTEM-FENDT",
+            dia=timezone.localdate(),
+            codigo=VoucherTipo.DESAYUNO,
+        )
+        self.assertEqual(pool_valtra.usados, 2)
+        self.assertEqual(pool_valtra.stock_total, 2)
+        self.assertEqual(pool_fendt.usados, 1)
+        self.assertEqual(pool_fendt.stock_total, 1)
 
     def test_redeem_batch_allows_guests_when_fixed_already_used(self):
         redeem_voucher(
