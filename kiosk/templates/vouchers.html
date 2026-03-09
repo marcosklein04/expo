@@ -44,7 +44,7 @@
     {% elif persona and comidas %}
       <h1 class="welcome-title">Bienvenido</h1>
       <p class="welcome-name">{{ persona.nombre_apellido }}</p>
-      <p class="voucher-copy">Elegí una o ambas comidas</p>
+      <p class="voucher-copy">Elegí una, dos o las tres comidas</p>
 
       <section class="meal-list">
         {% for comida in comidas %}
@@ -63,7 +63,7 @@
             data-guest-unlimited="{{ comida.invitados.ilimitado|yesno:'1,0' }}"
           >
             <div class="meal-head">
-              <span class="meal-name">{{ comida.codigo }}</span>
+              <span class="meal-name">{{ comida.etiqueta|upper }}</span>
               <span class="meal-status" data-role="meal-status">Cargando...</span>
             </div>
 

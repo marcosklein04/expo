@@ -10,7 +10,7 @@ Aplicacion de kiosco para emision de vouchers con control diario por persona/vou
    - `/totem/massey/`
 2. Ingreso de documento (`.../dni/`) con selector `DNI / PASAPORTE` y teclado nativo Android
 3. Consulta de cupos del dia
-4. Canje de una o ambas comidas (desayuno/almuerzo) con invitados por comida
+4. Canje de una, dos o las tres comidas (desayuno/almuerzo/merienda) con invitados por comida
 5. Emision e impresion del ticket (`/tickets/<ticket_numero>/`)
 
 ## API
@@ -36,18 +36,19 @@ Ejemplo `redeem-batch` (desde frontend):
   "empresa_codigo": "VALTRA_FENDT",
   "items": [
     {"comida": "DESAYUNO", "invitados": 2},
-    {"comida": "ALMUERZO", "invitados": 1}
+    {"comida": "ALMUERZO", "invitados": 1},
+    {"comida": "MERIENDA", "invitados": 1}
   ]
 }
 ```
 
 Reglas principales:
 
-- `DESAYUNO` y `ALMUERZO`: maximo 1 fijo por persona por dia.
-- Los invitados usan el mismo pool diario de la comida (`DESAYUNO` / `ALMUERZO`) del tótem.
-- Invitados en desayuno/almuerzo se habilitan si `Persona.puede_invitar=true` o si el nombre está en `KIOSK_SPECIAL_GUEST_NAMES`.
+- `DESAYUNO`, `ALMUERZO` y `MERIENDA`: maximo 1 fijo por persona por dia.
+- Los invitados usan el mismo pool diario de la comida (`DESAYUNO` / `ALMUERZO` / `MERIENDA`) del tótem.
+- Invitados en desayuno/almuerzo/merienda se habilitan si `Persona.puede_invitar=true` o si el nombre está en `KIOSK_SPECIAL_GUEST_NAMES`.
 - Pools diarios configurables por entorno por marca/tótem:
-  `VALTRA` 100/100, `FENDT` 20/20, `MASSEY` 120/120 por defecto.
+  `VALTRA` 100/100/100, `FENDT` 20/20/20, `MASSEY` 120/120/120 por defecto.
 - Aislamiento multiempresa: `MASSEY` usa padrón propio; `VALTRA_FENDT` comparte padrón entre ambos tótems.
 - Cada click en `Finalizar e imprimir` se guarda como `CanjeOperacion` con items por comida.
 - Cada ticket queda asociado a su operacion de canje para trazabilidad completa.
@@ -92,13 +93,16 @@ export MYSQL_HOST=127.0.0.1
 export MYSQL_PORT=3307
 export DEFAULT_EMPRESA_CODE=DEFAULT
 export SUPPORT_REPRINT_PIN=4832
-export KIOSK_SPECIAL_GUEST_NAMES="Facundo Guzman,Gesica Pieditorti"
+export KIOSK_SPECIAL_GUEST_NAMES="Emiliano Ferrari,Luna Arcamone,Facundo Guzman,Gesica Pieditorti"
 export POOL_STOCK_TOTEM_VALTRA_DESAYUNO=100
 export POOL_STOCK_TOTEM_VALTRA_ALMUERZO=100
+export POOL_STOCK_TOTEM_VALTRA_MERIENDA=100
 export POOL_STOCK_TOTEM_FENDT_DESAYUNO=20
 export POOL_STOCK_TOTEM_FENDT_ALMUERZO=20
+export POOL_STOCK_TOTEM_FENDT_MERIENDA=20
 export POOL_STOCK_TOTEM_MASSEY_DESAYUNO=120
 export POOL_STOCK_TOTEM_MASSEY_ALMUERZO=120
+export POOL_STOCK_TOTEM_MASSEY_MERIENDA=120
 ```
 
 Aplicar esquema y datos base:

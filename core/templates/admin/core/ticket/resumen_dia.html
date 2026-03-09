@@ -34,8 +34,10 @@
         <th>Nombre y apellido</th>
         <th>Voucher Desayuno</th>
         <th>Voucher almuerzo</th>
+        <th>Voucher merienda</th>
         <th>invitado desayuno</th>
         <th>invitado almuerzo</th>
+        <th>invitado merienda</th>
       </tr>
     </thead>
     <tbody>
@@ -45,12 +47,14 @@
           <td>{{ row.persona__nombre_apellido }}</td>
           <td>{{ row.voucher_desayuno }}</td>
           <td>{{ row.voucher_almuerzo }}</td>
+          <td>{{ row.voucher_merienda }}</td>
           <td>{{ row.invitado_desayuno }}</td>
           <td>{{ row.invitado_almuerzo }}</td>
+          <td>{{ row.invitado_merienda }}</td>
         </tr>
       {% empty %}
         <tr>
-          <td colspan="6">No hay tickets para el dia seleccionado.</td>
+          <td colspan="8">No hay tickets para el dia seleccionado.</td>
         </tr>
       {% endfor %}
     </tbody>
@@ -59,11 +63,13 @@
         <th colspan="2">Totales ({{ totales.personas }} personas)</th>
         <th>{{ totales.voucher_desayuno }}</th>
         <th>{{ totales.voucher_almuerzo }}</th>
+        <th>{{ totales.voucher_merienda }}</th>
         <th>{{ totales.invitado_desayuno }}</th>
         <th>{{ totales.invitado_almuerzo }}</th>
+        <th>{{ totales.invitado_merienda }}</th>
       </tr>
       <tr>
-        <th colspan="5">Total vouchers del dia</th>
+        <th colspan="7">Total vouchers del dia</th>
         <th>{{ totales.total_vouchers }}</th>
       </tr>
     </tfoot>

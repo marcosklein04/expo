@@ -30,11 +30,19 @@ from core.services import (
 
 
 def _seed_vouchers() -> None:
-    VoucherTipo.objects.create(codigo=VoucherTipo.DESAYUNO, cupo_por_dia=1)
-    VoucherTipo.objects.create(codigo=VoucherTipo.ALMUERZO, cupo_por_dia=1)
-    VoucherTipo.objects.create(codigo=VoucherTipo.INVITADO, cupo_por_dia=5)
-    VoucherTipo.objects.create(codigo=VoucherTipo.INVITADO_DESAYUNO, cupo_por_dia=5)
-    VoucherTipo.objects.create(codigo=VoucherTipo.INVITADO_ALMUERZO, cupo_por_dia=5)
+    for codigo, cupo in (
+        (VoucherTipo.DESAYUNO, 1),
+        (VoucherTipo.ALMUERZO, 1),
+        (VoucherTipo.MERIENDA, 1),
+        (VoucherTipo.INVITADO, 5),
+        (VoucherTipo.INVITADO_DESAYUNO, 5),
+        (VoucherTipo.INVITADO_ALMUERZO, 5),
+        (VoucherTipo.INVITADO_MERIENDA, 5),
+    ):
+        VoucherTipo.objects.update_or_create(
+            codigo=codigo,
+            defaults={"cupo_por_dia": cupo},
+        )
 
 
 class VoucherServiceTests(TestCase):
@@ -67,6 +75,10 @@ class VoucherServiceTests(TestCase):
         self.assertEqual(payload["persona"]["dni"], self.persona.dni)
 
         comidas = {item["codigo"]: item for item in payload["comidas"]}
+        self.assertEqual(
+            set(comidas),
+            {VoucherTipo.DESAYUNO, VoucherTipo.ALMUERZO, VoucherTipo.MERIENDA},
+        )
         self.assertEqual(comidas[VoucherTipo.DESAYUNO]["fijos"]["usados_persona"], 0)
         self.assertEqual(comidas[VoucherTipo.DESAYUNO]["fijos"]["cupo_persona"], 1)
         self.assertFalse(comidas[VoucherTipo.DESAYUNO]["invitados"]["habilitado"])
@@ -74,6 +86,9 @@ class VoucherServiceTests(TestCase):
         self.assertFalse(comidas[VoucherTipo.ALMUERZO]["invitados"]["habilitado"])
         self.assertEqual(comidas[VoucherTipo.ALMUERZO]["invitados"]["cupo_persona"], 0)
         self.assertFalse(comidas[VoucherTipo.ALMUERZO]["invitados"]["ilimitado"])
+        self.assertFalse(comidas[VoucherTipo.MERIENDA]["invitados"]["habilitado"])
+        self.assertEqual(comidas[VoucherTipo.MERIENDA]["invitados"]["cupo_persona"], 0)
+        self.assertFalse(comidas[VoucherTipo.MERIENDA]["invitados"]["ilimitado"])
 
     def test_lookup_marks_unlimited_guests_for_authorized_person(self):
         payload = lookup_persona_cupos(dni=self.persona_autorizada.dni, totem_id="TOTEM-01")
@@ -90,6 +105,12 @@ class VoucherServiceTests(TestCase):
             comidas[VoucherTipo.ALMUERZO]["invitados"]["disponibles_persona"],
             999,
         )
+        self.assertTrue(comidas[VoucherTipo.MERIENDA]["invitados"]["ilimitado"])
+        self.assertTrue(comidas[VoucherTipo.MERIENDA]["invitados"]["habilitado"])
+        self.assertEqual(
+            comidas[VoucherTipo.MERIENDA]["invitados"]["disponibles_persona"],
+            999,
+        )
 
     def test_lookup_allows_guests_for_fixed_name_without_flag(self):
         persona_fija = Persona.objects.create(
@@ -104,6 +125,7 @@ class VoucherServiceTests(TestCase):
         comidas = {item["codigo"]: item for item in payload["comidas"]}
         self.assertTrue(comidas[VoucherTipo.DESAYUNO]["invitados"]["habilitado"])
         self.assertTrue(comidas[VoucherTipo.ALMUERZO]["invitados"]["habilitado"])
+        self.assertTrue(comidas[VoucherTipo.MERIENDA]["invitados"]["habilitado"])
 
     def test_lookup_accepts_alphanumeric_document_for_passport(self):
         persona_pasaporte = Persona.objects.create(
@@ -228,6 +250,47 @@ class VoucherServiceTests(TestCase):
         self.assertEqual(len(tickets), 1)
         self.assertEqual(tickets[0].voucher_tipo.codigo, VoucherTipo.INVITADO_DESAYUNO)
 
+    def test_redeem_batch_supports_merienda_with_own_and_guest_tickets(self):
+        tickets = redeem_vouchers_batch(
+            dni=self.persona_autorizada.dni,
+            totem_id="TOTEM-01",
+            items=[
+                {
+                    "comida": VoucherTipo.MERIENDA,
+                    "canjear_propio": True,
+                    "invitados": 2,
+                }
+            ],
+        )
+        self.assertEqual(len(tickets), 3)
+        self.assertEqual(
+            [ticket.voucher_tipo.codigo for ticket in tickets],
+            [
+                VoucherTipo.MERIENDA,
+                VoucherTipo.INVITADO_MERIENDA,
+                VoucherTipo.INVITADO_MERIENDA,
+            ],
+        )
+
+        cupo_merienda = CupoDiario.objects.get(
+            persona=self.persona_autorizada,
+            voucher_tipo__codigo=VoucherTipo.MERIENDA,
+        )
+        self.assertEqual(cupo_merienda.usados, 1)
+        cupo_merienda_inv = CupoDiario.objects.get(
+            persona=self.persona_autorizada,
+            voucher_tipo__codigo=VoucherTipo.INVITADO_MERIENDA,
+        )
+        self.assertEqual(cupo_merienda_inv.usados, 2)
+
+        pool_merienda = PoolDiario.objects.get(
+            empresa=self.empresa,
+            dia=timezone.localdate(),
+            scope_codigo="TOTEM-01",
+            codigo=VoucherTipo.MERIENDA,
+        )
+        self.assertEqual(pool_merienda.usados, 3)
+
     def test_redeem_batch_allows_unlimited_breakfast_guests_for_authorized_person(self):
         persona_autorizada = Persona.objects.create(
             empresa=self.empresa,
@@ -273,8 +336,10 @@ class VoucherServiceTests(TestCase):
         KIOSK_TOTEM_ID_FENDT="TOTEM-FENDT",
         POOL_STOCK_TOTEM_VALTRA_DESAYUNO=2,
         POOL_STOCK_TOTEM_VALTRA_ALMUERZO=2,
+        POOL_STOCK_TOTEM_VALTRA_MERIENDA=2,
         POOL_STOCK_TOTEM_FENDT_DESAYUNO=1,
         POOL_STOCK_TOTEM_FENDT_ALMUERZO=1,
+        POOL_STOCK_TOTEM_FENDT_MERIENDA=1,
     )
     def test_pool_is_scoped_per_totem_and_shared_by_own_and_guest_tickets(self):
         Totem.objects.create(codigo="TOTEM-VALTRA", empresa=self.empresa, nombre="Totem Valtra")
@@ -342,6 +407,54 @@ class VoucherServiceTests(TestCase):
         self.assertEqual(pool_valtra.stock_total, 2)
         self.assertEqual(pool_fendt.usados, 1)
         self.assertEqual(pool_fendt.stock_total, 1)
+
+    @override_settings(
+        KIOSK_TOTEM_ID_VALTRA="TOTEM-VALTRA",
+        POOL_STOCK_TOTEM_VALTRA_MERIENDA=2,
+    )
+    def test_pool_uses_merienda_stock_per_totem(self):
+        Totem.objects.create(codigo="TOTEM-VALTRA", empresa=self.empresa, nombre="Totem Valtra")
+        persona_valtra = Persona.objects.create(
+            empresa=self.empresa,
+            dni="50000003",
+            nombre_apellido="Facundo Guzman",
+            credencial="AGCO",
+        )
+
+        tickets = redeem_vouchers_batch(
+            dni=persona_valtra.dni,
+            totem_id="TOTEM-VALTRA",
+            items=[
+                {
+                    "comida": VoucherTipo.MERIENDA,
+                    "canjear_propio": False,
+                    "invitados": 2,
+                }
+            ],
+        )
+        self.assertEqual(len(tickets), 2)
+
+        with self.assertRaises(StockAgotadoError):
+            redeem_vouchers_batch(
+                dni=persona_valtra.dni,
+                totem_id="TOTEM-VALTRA",
+                items=[
+                    {
+                        "comida": VoucherTipo.MERIENDA,
+                        "canjear_propio": False,
+                        "invitados": 1,
+                    }
+                ],
+            )
+
+        pool_merienda = PoolDiario.objects.get(
+            empresa=self.empresa,
+            scope_codigo="TOTEM-VALTRA",
+            dia=timezone.localdate(),
+            codigo=VoucherTipo.MERIENDA,
+        )
+        self.assertEqual(pool_merienda.usados, 2)
+        self.assertEqual(pool_merienda.stock_total, 2)
 
     def test_redeem_batch_allows_guests_when_fixed_already_used(self):
         redeem_voucher(
@@ -416,6 +529,14 @@ class VoucherServiceTests(TestCase):
                 totem_id="TOTEM-01",
             )
 
+    def test_redeem_single_accepts_merienda(self):
+        ticket = redeem_voucher(
+            dni=self.persona.dni,
+            voucher_codigo=VoucherTipo.MERIENDA,
+            totem_id="TOTEM-01",
+        )
+        self.assertEqual(ticket.voucher_tipo.codigo, VoucherTipo.MERIENDA)
+
     def test_reporte_tickets_diario_includes_pools(self):
         redeem_vouchers_batch(
             dni=self.persona_autorizada.dni,
@@ -459,13 +580,13 @@ class VoucherServiceTests(TestCase):
         self.assertEqual(report_a["total_tickets"], 1)
         self.assertEqual(report_b["total_tickets"], 1)
 
-    def test_reporte_operaciones_canje_returns_items_and_totals(self):
+    def test_reporte_operaciones_canje_returns_items_and_totals_for_merienda(self):
         redeem_vouchers_batch(
             dni=self.persona_autorizada.dni,
             totem_id="TOTEM-77",
             items=[
                 {
-                    "comida": VoucherTipo.ALMUERZO,
+                    "comida": VoucherTipo.MERIENDA,
                     "canjear_propio": True,
                     "invitados": 2,
                 }
@@ -482,7 +603,7 @@ class VoucherServiceTests(TestCase):
         self.assertEqual(report["total_tickets"], 3)
         self.assertEqual(report["total_tickets_propios"], 1)
         self.assertEqual(report["total_tickets_invitados"], 2)
-        self.assertEqual(report["operaciones"][0]["items"][0]["comida"], VoucherTipo.ALMUERZO)
+        self.assertEqual(report["operaciones"][0]["items"][0]["comida"], VoucherTipo.MERIENDA)
         self.assertEqual(
             report["operaciones"][0]["persona"]["empresa_codigo"],
             self.empresa.codigo,

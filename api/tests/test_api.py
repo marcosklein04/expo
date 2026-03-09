@@ -23,11 +23,19 @@ class ApiTests(TestCase):
             credencial="STAFF",
             puede_invitar=True,
         )
-        VoucherTipo.objects.create(codigo=VoucherTipo.DESAYUNO, cupo_por_dia=1)
-        VoucherTipo.objects.create(codigo=VoucherTipo.ALMUERZO, cupo_por_dia=1)
-        VoucherTipo.objects.create(codigo=VoucherTipo.INVITADO, cupo_por_dia=5)
-        VoucherTipo.objects.create(codigo=VoucherTipo.INVITADO_DESAYUNO, cupo_por_dia=5)
-        VoucherTipo.objects.create(codigo=VoucherTipo.INVITADO_ALMUERZO, cupo_por_dia=5)
+        for codigo, cupo in (
+            (VoucherTipo.DESAYUNO, 1),
+            (VoucherTipo.ALMUERZO, 1),
+            (VoucherTipo.MERIENDA, 1),
+            (VoucherTipo.INVITADO, 5),
+            (VoucherTipo.INVITADO_DESAYUNO, 5),
+            (VoucherTipo.INVITADO_ALMUERZO, 5),
+            (VoucherTipo.INVITADO_MERIENDA, 5),
+        ):
+            VoucherTipo.objects.update_or_create(
+                codigo=codigo,
+                defaults={"cupo_por_dia": cupo},
+            )
 
     def test_lookup_ok(self):
         response = self.client.post(
@@ -39,9 +47,12 @@ class ApiTests(TestCase):
         payload = response.json()
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["persona"]["dni"], self.persona.dni)
-        self.assertEqual(len(payload["comidas"]), 2)
+        self.assertEqual(len(payload["comidas"]), 3)
         codigos = {item["codigo"] for item in payload["comidas"]}
-        self.assertEqual(codigos, {VoucherTipo.DESAYUNO, VoucherTipo.ALMUERZO})
+        self.assertEqual(
+            codigos,
+            {VoucherTipo.DESAYUNO, VoucherTipo.ALMUERZO, VoucherTipo.MERIENDA},
+        )
 
     def test_lookup_accepts_passport_alphanumeric(self):
         persona_pasaporte = Persona.objects.create(
@@ -75,6 +86,8 @@ class ApiTests(TestCase):
         self.assertFalse(comidas[VoucherTipo.ALMUERZO]["invitados"]["agotado_persona"])
         self.assertTrue(comidas[VoucherTipo.ALMUERZO]["invitados"]["habilitado"])
         self.assertTrue(comidas[VoucherTipo.ALMUERZO]["invitados"]["ilimitado"])
+        self.assertTrue(comidas[VoucherTipo.MERIENDA]["invitados"]["habilitado"])
+        self.assertTrue(comidas[VoucherTipo.MERIENDA]["invitados"]["ilimitado"])
 
     def test_lookup_resolves_massey_padron_by_totem(self):
         empresa_massey = Empresa.objects.create(codigo="MASSEY", nombre="Massey")
@@ -118,6 +131,11 @@ class ApiTests(TestCase):
                             "canjear_propio": True,
                             "invitados": 2,
                         },
+                        {
+                            "comida": VoucherTipo.MERIENDA,
+                            "canjear_propio": False,
+                            "invitados": 1,
+                        },
                     ],
                 }
             ),
@@ -126,8 +144,8 @@ class ApiTests(TestCase):
         self.assertEqual(response.status_code, 201)
         payload = response.json()
         self.assertTrue(payload["ok"])
-        self.assertEqual(payload["total_tickets"], 5)
-        self.assertEqual(Ticket.objects.count(), 5)
+        self.assertEqual(payload["total_tickets"], 6)
+        self.assertEqual(Ticket.objects.count(), 6)
 
     def test_redeem_batch_invalid_payload(self):
         response = self.client.post(

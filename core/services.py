@@ -25,13 +25,20 @@ from core.models import (
 
 audit_logger = logging.getLogger("kiosk.audit")
 
-COMIDAS = (VoucherTipo.DESAYUNO, VoucherTipo.ALMUERZO)
+COMIDAS = (
+    VoucherTipo.DESAYUNO,
+    VoucherTipo.ALMUERZO,
+    VoucherTipo.MERIENDA,
+)
 INVITADO_POR_COMIDA = {
     VoucherTipo.DESAYUNO: VoucherTipo.INVITADO_DESAYUNO,
     VoucherTipo.ALMUERZO: VoucherTipo.INVITADO_ALMUERZO,
+    VoucherTipo.MERIENDA: VoucherTipo.INVITADO_MERIENDA,
 }
 INVITADOS_ILIMITADOS_SOFT_MAX_UI = 999
 SPECIAL_GUEST_FALLBACK_NAMES = (
+    "Emiliano Ferrari",
+    "Luna Arcamone",
     "Facundo Guzman",
     "Gesica Pieditorti",
 )
@@ -265,8 +272,10 @@ def _pool_codigo_base(codigo: str) -> str:
     pool_by_codigo = {
         VoucherTipo.DESAYUNO: VoucherTipo.DESAYUNO,
         VoucherTipo.ALMUERZO: VoucherTipo.ALMUERZO,
+        VoucherTipo.MERIENDA: VoucherTipo.MERIENDA,
         VoucherTipo.INVITADO_DESAYUNO: VoucherTipo.DESAYUNO,
         VoucherTipo.INVITADO_ALMUERZO: VoucherTipo.ALMUERZO,
+        VoucherTipo.INVITADO_MERIENDA: VoucherTipo.MERIENDA,
     }
     if codigo not in pool_by_codigo:
         raise VoucherInvalidoError("No existe configuracion de pool para ese codigo.")
@@ -281,14 +290,17 @@ def _pool_default_stock(*, codigo: str, totem_id: str | None) -> int:
         str(getattr(settings, "KIOSK_TOTEM_ID_VALTRA", "TOTEM_VALTRA")).strip().upper(): {
             VoucherTipo.DESAYUNO: settings.POOL_STOCK_TOTEM_VALTRA_DESAYUNO,
             VoucherTipo.ALMUERZO: settings.POOL_STOCK_TOTEM_VALTRA_ALMUERZO,
+            VoucherTipo.MERIENDA: settings.POOL_STOCK_TOTEM_VALTRA_MERIENDA,
         },
         str(getattr(settings, "KIOSK_TOTEM_ID_FENDT", "TOTEM_FENDT")).strip().upper(): {
             VoucherTipo.DESAYUNO: settings.POOL_STOCK_TOTEM_FENDT_DESAYUNO,
             VoucherTipo.ALMUERZO: settings.POOL_STOCK_TOTEM_FENDT_ALMUERZO,
+            VoucherTipo.MERIENDA: settings.POOL_STOCK_TOTEM_FENDT_MERIENDA,
         },
         str(getattr(settings, "KIOSK_TOTEM_ID_MASSEY", "TOTEM_MASSEY")).strip().upper(): {
             VoucherTipo.DESAYUNO: settings.POOL_STOCK_TOTEM_MASSEY_DESAYUNO,
             VoucherTipo.ALMUERZO: settings.POOL_STOCK_TOTEM_MASSEY_ALMUERZO,
+            VoucherTipo.MERIENDA: settings.POOL_STOCK_TOTEM_MASSEY_MERIENDA,
         },
     }
     scoped_defaults = per_totem.get(normalized_totem_id or _default_totem_id(), {})
@@ -298,6 +310,7 @@ def _pool_default_stock(*, codigo: str, totem_id: str | None) -> int:
     default_by_codigo = {
         VoucherTipo.DESAYUNO: settings.POOL_STOCK_FIJOS_DESAYUNO,
         VoucherTipo.ALMUERZO: settings.POOL_STOCK_FIJOS_ALMUERZO,
+        VoucherTipo.MERIENDA: settings.POOL_STOCK_FIJOS_MERIENDA,
     }
     return int(default_by_codigo[comida_codigo])
 
@@ -353,8 +366,10 @@ def _required_voucher_codes() -> list[str]:
     return [
         VoucherTipo.DESAYUNO,
         VoucherTipo.ALMUERZO,
+        VoucherTipo.MERIENDA,
         VoucherTipo.INVITADO_DESAYUNO,
         VoucherTipo.INVITADO_ALMUERZO,
+        VoucherTipo.INVITADO_MERIENDA,
     ]
 
 
@@ -641,7 +656,7 @@ def normalizar_redeem_batch_items(
         ).upper().strip()
         if comida_codigo not in COMIDAS:
             raise VoucherInvalidoError(
-                "Solo se permiten DESAYUNO y ALMUERZO en este flujo.",
+                "Solo se permiten DESAYUNO, ALMUERZO y MERIENDA en este flujo.",
                 details={"codigo": comida_codigo},
             )
 
@@ -904,7 +919,7 @@ def redeem_voucher(
     voucher_codigo = str(voucher_codigo).upper().strip()
     if voucher_codigo not in COMIDAS:
         raise VoucherInvalidoError(
-            "En este flujo solo se permite canjear DESAYUNO o ALMUERZO."
+            "En este flujo solo se permite canjear DESAYUNO, ALMUERZO o MERIENDA."
         )
 
     tickets = redeem_vouchers_batch(
@@ -1010,6 +1025,7 @@ def reporte_tickets_diario(
                 VoucherTipo.INVITADO,
                 VoucherTipo.INVITADO_DESAYUNO,
                 VoucherTipo.INVITADO_ALMUERZO,
+                VoucherTipo.INVITADO_MERIENDA,
             ]
         )
         .values("persona__dni", "persona__nombre_apellido")
@@ -1106,6 +1122,7 @@ def reporte_operaciones_canje(
         VoucherTipo.INVITADO,
         VoucherTipo.INVITADO_DESAYUNO,
         VoucherTipo.INVITADO_ALMUERZO,
+        VoucherTipo.INVITADO_MERIENDA,
     }
 
     payload_operaciones: list[dict[str, Any]] = []
