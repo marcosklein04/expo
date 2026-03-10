@@ -16,8 +16,7 @@
   const PRINTING_MIN_VISIBLE_MS = 5000;
   const SUPPORT_PIN_LENGTH = 4;
   const UNLIMITED_GUEST_SOFT_MAX = 999;
-  const RAWBT_BATCH_SIZE = 3;
-  const RAWBT_BATCH_DELAY_MS = 220;
+  const RAWBT_PRINT_DELAY_MS = 220;
 
   const isAndroidDevice = /Android/i.test(navigator.userAgent || "");
   const forceBrowserMode = new URLSearchParams(window.location.search).get("print_mode") === "browser";
@@ -530,12 +529,10 @@
   async function printTickets(tickets) {
     if (preferRawBt) {
       const payloads = tickets.map((ticket) => buildRawBtTicketPayload(ticket)).filter(Boolean);
-
-      for (let index = 0; index < payloads.length; index += RAWBT_BATCH_SIZE) {
-        const chunk = payloads.slice(index, index + RAWBT_BATCH_SIZE).join("");
-        sendToRawBt(chunk);
-        if (index + RAWBT_BATCH_SIZE < payloads.length) {
-          await sleep(RAWBT_BATCH_DELAY_MS);
+      for (let index = 0; index < payloads.length; index += 1) {
+        sendToRawBt(payloads[index]);
+        if (index + 1 < payloads.length) {
+          await sleep(RAWBT_PRINT_DELAY_MS);
         }
       }
       return;
