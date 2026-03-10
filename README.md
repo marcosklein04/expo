@@ -48,7 +48,7 @@ Reglas principales:
 - Los invitados usan el mismo pool diario de la comida (`DESAYUNO` / `ALMUERZO` / `MERIENDA`) del tótem.
 - Invitados en desayuno/almuerzo/merienda se habilitan si `Persona.puede_invitar=true` o si el nombre está en `KIOSK_SPECIAL_GUEST_NAMES`.
 - Pools diarios configurables por entorno por marca/tótem:
-  `VALTRA` 100/100/100, `FENDT` 20/20/20, `MASSEY` 120/120/120 por defecto.
+  `VALTRA` 100/100/100, `FENDT` 20/20/20, `MASSEY` 121/120/120 por defecto.
 - Aislamiento multiempresa: `MASSEY` usa padrón propio; `VALTRA_FENDT` comparte padrón entre ambos tótems.
 - Cada click en `Finalizar e imprimir` se guarda como `CanjeOperacion` con items por comida.
 - Cada ticket queda asociado a su operacion de canje para trazabilidad completa.
@@ -100,7 +100,7 @@ export POOL_STOCK_TOTEM_VALTRA_MERIENDA=100
 export POOL_STOCK_TOTEM_FENDT_DESAYUNO=20
 export POOL_STOCK_TOTEM_FENDT_ALMUERZO=20
 export POOL_STOCK_TOTEM_FENDT_MERIENDA=20
-export POOL_STOCK_TOTEM_MASSEY_DESAYUNO=120
+export POOL_STOCK_TOTEM_MASSEY_DESAYUNO=121
 export POOL_STOCK_TOTEM_MASSEY_ALMUERZO=120
 export POOL_STOCK_TOTEM_MASSEY_MERIENDA=120
 ```
