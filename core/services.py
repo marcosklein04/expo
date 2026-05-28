@@ -39,9 +39,7 @@ INVITADO_POR_COMIDA = {
 }
 INVITADOS_ILIMITADOS_SOFT_MAX_UI = 999
 SPECIAL_GUEST_FALLBACK_NAMES = (
-    "Emiliano Ferrari",
-    "Luna Arcamone",
-    "Facundo Guzman",
+    "Laura Navas",
     "Gesica Pieditorti",
 )
 

@@ -140,7 +140,7 @@ KIOSK_TOTEM_ID_MASSEY = os.getenv("KIOSK_TOTEM_ID_MASSEY", "TOTEM_MASSEY")
 SUPPORT_REPRINT_PIN = os.getenv("SUPPORT_REPRINT_PIN", "4832")
 KIOSK_SPECIAL_GUEST_NAMES = env_list(
     "KIOSK_SPECIAL_GUEST_NAMES",
-    default="Emiliano Ferrari,Luna Arcamone,Facundo Guzman,Gesica Pieditorti",
+    default="Laura Navas,Gesica Pieditorti",
 )
 POOL_STOCK_FIJOS_DESAYUNO = env_int("POOL_STOCK_FIJOS_DESAYUNO", 120)
 POOL_STOCK_FIJOS_ALMUERZO = env_int("POOL_STOCK_FIJOS_ALMUERZO", 120)
