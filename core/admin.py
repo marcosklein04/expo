@@ -136,6 +136,10 @@ class TicketAdmin(admin.ModelAdmin):
                     "id",
                     filter=Q(voucher_tipo__codigo=VoucherTipo.MERIENDA),
                 ),
+                voucher_postre=Count(
+                    "id",
+                    filter=Q(voucher_tipo__codigo=VoucherTipo.POSTRE),
+                ),
                 invitado_desayuno=Count(
                     "id",
                     filter=Q(voucher_tipo__codigo=VoucherTipo.INVITADO_DESAYUNO),
@@ -147,6 +151,10 @@ class TicketAdmin(admin.ModelAdmin):
                 invitado_merienda=Count(
                     "id",
                     filter=Q(voucher_tipo__codigo=VoucherTipo.INVITADO_MERIENDA),
+                ),
+                invitado_postre=Count(
+                    "id",
+                    filter=Q(voucher_tipo__codigo=VoucherTipo.INVITADO_POSTRE),
                 ),
             )
             .order_by("persona__nombre_apellido", "persona__dni")
@@ -172,9 +180,11 @@ class TicketAdmin(admin.ModelAdmin):
                 "Voucher Desayuno",
                 "Voucher almuerzo",
                 "Voucher merienda",
+                "Voucher postre",
                 "invitado desayuno",
                 "invitado almuerzo",
                 "invitado merienda",
+                "invitado postre",
             ]
         )
 
@@ -187,9 +197,11 @@ class TicketAdmin(admin.ModelAdmin):
                     row["voucher_desayuno"],
                     row["voucher_almuerzo"],
                     row["voucher_merienda"],
+                    row["voucher_postre"],
                     row["invitado_desayuno"],
                     row["invitado_almuerzo"],
                     row["invitado_merienda"],
+                    row["invitado_postre"],
                 ]
             )
 
@@ -204,17 +216,21 @@ class TicketAdmin(admin.ModelAdmin):
             "voucher_desayuno": sum(int(f["voucher_desayuno"]) for f in filas),
             "voucher_almuerzo": sum(int(f["voucher_almuerzo"]) for f in filas),
             "voucher_merienda": sum(int(f["voucher_merienda"]) for f in filas),
+            "voucher_postre": sum(int(f["voucher_postre"]) for f in filas),
             "invitado_desayuno": sum(int(f["invitado_desayuno"]) for f in filas),
             "invitado_almuerzo": sum(int(f["invitado_almuerzo"]) for f in filas),
             "invitado_merienda": sum(int(f["invitado_merienda"]) for f in filas),
+            "invitado_postre": sum(int(f["invitado_postre"]) for f in filas),
         }
         totales["total_vouchers"] = (
             totales["voucher_desayuno"]
             + totales["voucher_almuerzo"]
             + totales["voucher_merienda"]
+            + totales["voucher_postre"]
             + totales["invitado_desayuno"]
             + totales["invitado_almuerzo"]
             + totales["invitado_merienda"]
+            + totales["invitado_postre"]
         )
 
         context = {

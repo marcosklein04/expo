@@ -29,11 +29,13 @@ COMIDAS = (
     VoucherTipo.DESAYUNO,
     VoucherTipo.ALMUERZO,
     VoucherTipo.MERIENDA,
+    VoucherTipo.POSTRE,
 )
 INVITADO_POR_COMIDA = {
     VoucherTipo.DESAYUNO: VoucherTipo.INVITADO_DESAYUNO,
     VoucherTipo.ALMUERZO: VoucherTipo.INVITADO_ALMUERZO,
     VoucherTipo.MERIENDA: VoucherTipo.INVITADO_MERIENDA,
+    VoucherTipo.POSTRE: VoucherTipo.INVITADO_POSTRE,
 }
 INVITADOS_ILIMITADOS_SOFT_MAX_UI = 999
 SPECIAL_GUEST_FALLBACK_NAMES = (
@@ -273,9 +275,11 @@ def _pool_codigo_base(codigo: str) -> str:
         VoucherTipo.DESAYUNO: VoucherTipo.DESAYUNO,
         VoucherTipo.ALMUERZO: VoucherTipo.ALMUERZO,
         VoucherTipo.MERIENDA: VoucherTipo.MERIENDA,
+        VoucherTipo.POSTRE: VoucherTipo.POSTRE,
         VoucherTipo.INVITADO_DESAYUNO: VoucherTipo.DESAYUNO,
         VoucherTipo.INVITADO_ALMUERZO: VoucherTipo.ALMUERZO,
         VoucherTipo.INVITADO_MERIENDA: VoucherTipo.MERIENDA,
+        VoucherTipo.INVITADO_POSTRE: VoucherTipo.POSTRE,
     }
     if codigo not in pool_by_codigo:
         raise VoucherInvalidoError("No existe configuracion de pool para ese codigo.")
@@ -291,16 +295,19 @@ def _pool_default_stock(*, codigo: str, totem_id: str | None) -> int:
             VoucherTipo.DESAYUNO: settings.POOL_STOCK_TOTEM_VALTRA_DESAYUNO,
             VoucherTipo.ALMUERZO: settings.POOL_STOCK_TOTEM_VALTRA_ALMUERZO,
             VoucherTipo.MERIENDA: settings.POOL_STOCK_TOTEM_VALTRA_MERIENDA,
+            VoucherTipo.POSTRE: settings.POOL_STOCK_TOTEM_VALTRA_POSTRE,
         },
         str(getattr(settings, "KIOSK_TOTEM_ID_FENDT", "TOTEM_FENDT")).strip().upper(): {
             VoucherTipo.DESAYUNO: settings.POOL_STOCK_TOTEM_FENDT_DESAYUNO,
             VoucherTipo.ALMUERZO: settings.POOL_STOCK_TOTEM_FENDT_ALMUERZO,
             VoucherTipo.MERIENDA: settings.POOL_STOCK_TOTEM_FENDT_MERIENDA,
+            VoucherTipo.POSTRE: settings.POOL_STOCK_TOTEM_FENDT_POSTRE,
         },
         str(getattr(settings, "KIOSK_TOTEM_ID_MASSEY", "TOTEM_MASSEY")).strip().upper(): {
             VoucherTipo.DESAYUNO: settings.POOL_STOCK_TOTEM_MASSEY_DESAYUNO,
             VoucherTipo.ALMUERZO: settings.POOL_STOCK_TOTEM_MASSEY_ALMUERZO,
             VoucherTipo.MERIENDA: settings.POOL_STOCK_TOTEM_MASSEY_MERIENDA,
+            VoucherTipo.POSTRE: settings.POOL_STOCK_TOTEM_MASSEY_POSTRE,
         },
     }
     scoped_defaults = per_totem.get(normalized_totem_id or _default_totem_id(), {})
@@ -311,6 +318,7 @@ def _pool_default_stock(*, codigo: str, totem_id: str | None) -> int:
         VoucherTipo.DESAYUNO: settings.POOL_STOCK_FIJOS_DESAYUNO,
         VoucherTipo.ALMUERZO: settings.POOL_STOCK_FIJOS_ALMUERZO,
         VoucherTipo.MERIENDA: settings.POOL_STOCK_FIJOS_MERIENDA,
+        VoucherTipo.POSTRE: settings.POOL_STOCK_FIJOS_POSTRE,
     }
     return int(default_by_codigo[comida_codigo])
 
@@ -367,9 +375,11 @@ def _required_voucher_codes() -> list[str]:
         VoucherTipo.DESAYUNO,
         VoucherTipo.ALMUERZO,
         VoucherTipo.MERIENDA,
+        VoucherTipo.POSTRE,
         VoucherTipo.INVITADO_DESAYUNO,
         VoucherTipo.INVITADO_ALMUERZO,
         VoucherTipo.INVITADO_MERIENDA,
+        VoucherTipo.INVITADO_POSTRE,
     ]
 
 
@@ -656,7 +666,7 @@ def normalizar_redeem_batch_items(
         ).upper().strip()
         if comida_codigo not in COMIDAS:
             raise VoucherInvalidoError(
-                "Solo se permiten DESAYUNO, ALMUERZO y MERIENDA en este flujo.",
+                "Solo se permiten DESAYUNO, ALMUERZO, MERIENDA y POSTRE en este flujo.",
                 details={"codigo": comida_codigo},
             )
 
@@ -919,7 +929,7 @@ def redeem_voucher(
     voucher_codigo = str(voucher_codigo).upper().strip()
     if voucher_codigo not in COMIDAS:
         raise VoucherInvalidoError(
-            "En este flujo solo se permite canjear DESAYUNO, ALMUERZO o MERIENDA."
+            "En este flujo solo se permite canjear DESAYUNO, ALMUERZO, MERIENDA o POSTRE."
         )
 
     tickets = redeem_vouchers_batch(
@@ -1026,6 +1036,7 @@ def reporte_tickets_diario(
                 VoucherTipo.INVITADO_DESAYUNO,
                 VoucherTipo.INVITADO_ALMUERZO,
                 VoucherTipo.INVITADO_MERIENDA,
+                VoucherTipo.INVITADO_POSTRE,
             ]
         )
         .values("persona__dni", "persona__nombre_apellido")
@@ -1123,6 +1134,7 @@ def reporte_operaciones_canje(
         VoucherTipo.INVITADO_DESAYUNO,
         VoucherTipo.INVITADO_ALMUERZO,
         VoucherTipo.INVITADO_MERIENDA,
+        VoucherTipo.INVITADO_POSTRE,
     }
 
     payload_operaciones: list[dict[str, Any]] = []

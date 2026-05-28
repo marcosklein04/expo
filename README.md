@@ -1,4 +1,4 @@
-# Expo Kiosk Vouchers (Django + MySQL)
+# Expo Kiosk Vouchers (Django + PostgreSQL)
 
 Aplicacion de kiosco para emision de vouchers con control diario por persona/voucher, pools diarios de stock por comida y soporte para multiples empresas y multiples totems con ticket termico.
 
@@ -10,7 +10,7 @@ Aplicacion de kiosco para emision de vouchers con control diario por persona/vou
    - `/totem/massey/`
 2. Ingreso de documento (`.../dni/`) con selector `DNI / PASAPORTE` y teclado nativo Android
 3. Consulta de cupos del dia
-4. Canje de una, dos o las tres comidas (desayuno/almuerzo/merienda) con invitados por comida
+4. Canje de una o varias comidas (desayuno/almuerzo/merienda/postre) con invitados por comida
 5. Emision e impresion del ticket (`/tickets/<ticket_numero>/`)
 
 ## API
@@ -37,18 +37,19 @@ Ejemplo `redeem-batch` (desde frontend):
   "items": [
     {"comida": "DESAYUNO", "invitados": 2},
     {"comida": "ALMUERZO", "invitados": 1},
-    {"comida": "MERIENDA", "invitados": 1}
+    {"comida": "MERIENDA", "invitados": 1},
+    {"comida": "POSTRE", "invitados": 1}
   ]
 }
 ```
 
 Reglas principales:
 
-- `DESAYUNO`, `ALMUERZO` y `MERIENDA`: maximo 1 fijo por persona por dia.
-- Los invitados usan el mismo pool diario de la comida (`DESAYUNO` / `ALMUERZO` / `MERIENDA`) del tótem.
-- Invitados en desayuno/almuerzo/merienda se habilitan si `Persona.puede_invitar=true` o si el nombre está en `KIOSK_SPECIAL_GUEST_NAMES`.
-- Pools diarios configurables por entorno por marca/tótem:
-  `VALTRA` 100/100/100, `FENDT` 20/20/20, `MASSEY` 121/120/120 por defecto.
+- `DESAYUNO`, `ALMUERZO`, `MERIENDA` y `POSTRE`: maximo 1 fijo por persona por dia.
+- Los invitados usan el mismo pool diario de la comida (`DESAYUNO` / `ALMUERZO` / `MERIENDA` / `POSTRE`) del tótem.
+- Invitados en desayuno/almuerzo/merienda/postre se habilitan si `Persona.puede_invitar=true` o si el nombre está en `KIOSK_SPECIAL_GUEST_NAMES`.
+- Pools diarios configurables por entorno por marca/tótem (desayuno/almuerzo/merienda/postre):
+  `VALTRA` 100/100/100/121, `FENDT` 20/20/20/121, `MASSEY` 121/120/120/121 por defecto.
 - Aislamiento multiempresa: `MASSEY` usa padrón propio; `VALTRA_FENDT` comparte padrón entre ambos tótems.
 - Cada click en `Finalizar e imprimir` se guarda como `CanjeOperacion` con items por comida.
 - Cada ticket queda asociado a su operacion de canje para trazabilidad completa.
@@ -79,30 +80,40 @@ Tests:
 DJANGO_ENV=dev SECURE_SSL_REDIRECT=False DEFAULT_EMPRESA_CODE=DEFAULT DB_ENGINE=sqlite SQLITE_NAME=db_test.sqlite3 .venv/bin/python manage.py test
 ```
 
-## Setup MySQL
+## Setup PostgreSQL
+
+Crear DB y usuario con el script `scripts/postgres_bootstrap.sql` (editar password antes de correr):
+
+```bash
+sudo -u postgres psql -f scripts/postgres_bootstrap.sql
+```
 
 Configurar variables de entorno:
 
 ```bash
-export DB_ENGINE=mysql
+export DB_ENGINE=postgres
 export DJANGO_ENV=prod
-export MYSQL_DATABASE=expo_kiosk
-export MYSQL_USER=expo_kiosk_user
-export MYSQL_PASSWORD=CHANGE_ME_STRONG_PASSWORD
-export MYSQL_HOST=127.0.0.1
-export MYSQL_PORT=3307
+export POSTGRES_DATABASE=expo_kiosk
+export POSTGRES_USER=expo_kiosk_user
+export POSTGRES_PASSWORD=CHANGE_ME_STRONG_PASSWORD
+export POSTGRES_HOST=127.0.0.1
+export POSTGRES_PORT=5432
+export POSTGRES_SSLMODE=prefer
 export DEFAULT_EMPRESA_CODE=DEFAULT
 export SUPPORT_REPRINT_PIN=4832
 export KIOSK_SPECIAL_GUEST_NAMES="Emiliano Ferrari,Luna Arcamone,Facundo Guzman,Gesica Pieditorti"
 export POOL_STOCK_TOTEM_VALTRA_DESAYUNO=100
 export POOL_STOCK_TOTEM_VALTRA_ALMUERZO=100
 export POOL_STOCK_TOTEM_VALTRA_MERIENDA=100
+export POOL_STOCK_TOTEM_VALTRA_POSTRE=121
 export POOL_STOCK_TOTEM_FENDT_DESAYUNO=20
 export POOL_STOCK_TOTEM_FENDT_ALMUERZO=20
 export POOL_STOCK_TOTEM_FENDT_MERIENDA=20
+export POOL_STOCK_TOTEM_FENDT_POSTRE=121
 export POOL_STOCK_TOTEM_MASSEY_DESAYUNO=121
 export POOL_STOCK_TOTEM_MASSEY_ALMUERZO=120
 export POOL_STOCK_TOTEM_MASSEY_MERIENDA=120
+export POOL_STOCK_TOTEM_MASSEY_POSTRE=121
 ```
 
 Aplicar esquema y datos base:
@@ -111,6 +122,35 @@ Aplicar esquema y datos base:
 .venv/bin/python manage.py migrate
 .venv/bin/python manage.py seed_vouchers
 ```
+
+## Migracion de datos desde MySQL a Postgres
+
+Para mover datos productivos de una base MySQL existente a Postgres. **Hacer backup de MySQL antes de cualquier paso.**
+
+```bash
+# 1. En el server MySQL original (con DB_ENGINE=mysql todavia activo en otro checkout/rama si hace falta):
+#    Exportar todo a JSON con natural keys (mas portable que serialized PK).
+.venv/bin/python manage.py dumpdata \
+  --natural-foreign --natural-primary \
+  --exclude=contenttypes --exclude=auth.permission \
+  --exclude=admin.logentry --exclude=sessions \
+  --indent 2 -o /tmp/expo_dump.json
+
+# 2. En el server destino (con DB_ENGINE=postgres y la DB recien creada):
+#    Aplicar el esquema vacio.
+.venv/bin/python manage.py migrate
+
+# 3. Cargar los datos. seed_vouchers NO se corre antes para evitar conflictos.
+.venv/bin/python manage.py loaddata /tmp/expo_dump.json
+
+# 4. Resetear las secuencias de Postgres para que los proximos INSERT no choquen.
+.venv/bin/python manage.py sqlsequencereset core api kiosk tickets | .venv/bin/python manage.py dbshell
+
+# 5. Verificar conteos basicos.
+.venv/bin/python manage.py shell -c "from core.models import Persona, Ticket, CanjeOperacion; print('personas', Persona.objects.count(), 'tickets', Ticket.objects.count(), 'operaciones', CanjeOperacion.objects.count())"
+```
+
+Si el dataset es grande y `loaddata` se hace lento, alternativa: usar [pgloader](https://pgloader.io/) que copia tablas directo de MySQL a Postgres y maneja sequences automaticamente.
 
 ## Importacion desde Excel
 
@@ -172,7 +212,7 @@ Registro de empresas/totems:
 ## Despliegue nube (resumen)
 
 - Ejecutar con `gunicorn config.wsgi:application` detras de Nginx o LB cloud.
-- Configurar `DB_ENGINE=mysql` + credenciales gestionadas (RDS/Cloud SQL/Aurora).
+- Configurar `DB_ENGINE=postgres` + credenciales (Postgres self-hosted en VPS, o RDS/Cloud SQL si se migra a managed).
 - Correr `manage.py migrate` y `manage.py seed_vouchers` en cada release.
 - Definir `DEFAULT_TOTEM_ID` distinto por totem.
 - Habilitar TLS, `SECURE_SSL_REDIRECT`, HSTS y cookies seguras en produccion.

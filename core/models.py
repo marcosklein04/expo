@@ -83,19 +83,23 @@ class VoucherTipo(models.Model):
     DESAYUNO = "DESAYUNO"
     ALMUERZO = "ALMUERZO"
     MERIENDA = "MERIENDA"
+    POSTRE = "POSTRE"
     INVITADO = "INVITADO"
     INVITADO_DESAYUNO = "INVITADO_DESAYUNO"
     INVITADO_ALMUERZO = "INVITADO_ALMUERZO"
     INVITADO_MERIENDA = "INVITADO_MERIENDA"
+    INVITADO_POSTRE = "INVITADO_POSTRE"
 
     CODIGOS = [
         (DESAYUNO, "Desayuno"),
         (ALMUERZO, "Almuerzo"),
         (MERIENDA, "Merienda"),
+        (POSTRE, "Postre"),
         (INVITADO, "Invitado"),
         (INVITADO_DESAYUNO, "Invitado desayuno"),
         (INVITADO_ALMUERZO, "Invitado almuerzo"),
         (INVITADO_MERIENDA, "Invitado merienda"),
+        (INVITADO_POSTRE, "Invitado postre"),
     ]
 
     codigo = models.CharField(max_length=20, choices=CODIGOS, unique=True)
@@ -167,6 +171,7 @@ class CanjeOperacionItem(models.Model):
         (VoucherTipo.DESAYUNO, "Desayuno"),
         (VoucherTipo.ALMUERZO, "Almuerzo"),
         (VoucherTipo.MERIENDA, "Merienda"),
+        (VoucherTipo.POSTRE, "Postre"),
     ]
 
     operacion = models.ForeignKey(
@@ -238,9 +243,11 @@ class PoolDiario(models.Model):
         (VoucherTipo.DESAYUNO, "Pool fijos desayuno"),
         (VoucherTipo.ALMUERZO, "Pool fijos almuerzo"),
         (VoucherTipo.MERIENDA, "Pool fijos merienda"),
+        (VoucherTipo.POSTRE, "Pool fijos postre"),
         (VoucherTipo.INVITADO_DESAYUNO, "Pool invitados desayuno"),
         (VoucherTipo.INVITADO_ALMUERZO, "Pool invitados almuerzo"),
         (VoucherTipo.INVITADO_MERIENDA, "Pool invitados merienda"),
+        (VoucherTipo.INVITADO_POSTRE, "Pool invitados postre"),
     ]
 
     empresa = models.ForeignKey(

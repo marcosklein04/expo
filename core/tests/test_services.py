@@ -34,10 +34,12 @@ def _seed_vouchers() -> None:
         (VoucherTipo.DESAYUNO, 1),
         (VoucherTipo.ALMUERZO, 1),
         (VoucherTipo.MERIENDA, 1),
+        (VoucherTipo.POSTRE, 1),
         (VoucherTipo.INVITADO, 5),
         (VoucherTipo.INVITADO_DESAYUNO, 5),
         (VoucherTipo.INVITADO_ALMUERZO, 5),
         (VoucherTipo.INVITADO_MERIENDA, 5),
+        (VoucherTipo.INVITADO_POSTRE, 5),
     ):
         VoucherTipo.objects.update_or_create(
             codigo=codigo,
@@ -77,7 +79,12 @@ class VoucherServiceTests(TestCase):
         comidas = {item["codigo"]: item for item in payload["comidas"]}
         self.assertEqual(
             set(comidas),
-            {VoucherTipo.DESAYUNO, VoucherTipo.ALMUERZO, VoucherTipo.MERIENDA},
+            {
+                VoucherTipo.DESAYUNO,
+                VoucherTipo.ALMUERZO,
+                VoucherTipo.MERIENDA,
+                VoucherTipo.POSTRE,
+            },
         )
         self.assertEqual(comidas[VoucherTipo.DESAYUNO]["fijos"]["usados_persona"], 0)
         self.assertEqual(comidas[VoucherTipo.DESAYUNO]["fijos"]["cupo_persona"], 1)
@@ -698,14 +705,14 @@ class VoucherServiceTests(TestCase):
             )
 
 
-class VoucherConcurrencyMySQLTests(TransactionTestCase):
+class VoucherConcurrencyPostgresTests(TransactionTestCase):
     reset_sequences = True
 
     def setUp(self):
-        if connection.vendor != "mysql":
-            self.skipTest("Test de concurrencia habilitado solo para MySQL.")
+        if connection.vendor != "postgresql":
+            self.skipTest("Test de concurrencia habilitado solo para PostgreSQL.")
 
-        self.empresa = Empresa.objects.create(codigo="MYSQL_CO", nombre="MySQL Co")
+        self.empresa = Empresa.objects.create(codigo="PG_CO", nombre="Postgres Co")
         Totem.objects.create(codigo="TOTEM-01", empresa=self.empresa, nombre="Totem 1")
         self.persona = Persona.objects.create(
             empresa=self.empresa,

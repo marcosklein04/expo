@@ -1,4 +1,4 @@
 Django>=5.1,<6.1
-mysqlclient>=2.2
+psycopg[binary]>=3.2
 gunicorn>=22.0
 openpyxl>=3.1

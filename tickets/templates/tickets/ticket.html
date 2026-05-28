@@ -29,7 +29,7 @@
 
     <section class="voucher">{{ ticket.voucher_tipo.codigo }}</section>
 
-    {% if ticket.voucher_tipo.codigo == 'DESAYUNO' or ticket.voucher_tipo.codigo == 'ALMUERZO' or ticket.voucher_tipo.codigo == 'MERIENDA' %}
+    {% if ticket.voucher_tipo.codigo == 'DESAYUNO' or ticket.voucher_tipo.codigo == 'ALMUERZO' or ticket.voucher_tipo.codigo == 'MERIENDA' or ticket.voucher_tipo.codigo == 'POSTRE' %}
       <section class="meta">
         <div><strong>Tipo de comida:</strong> {{ ticket.persona.get_tipo_vianda_display }}</div>
       </section>
