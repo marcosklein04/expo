@@ -24,6 +24,8 @@ COLUMN_ALIASES = {
     "nombre y apellido": "nombre_apellido",
     "nombre apellido": "nombre_apellido",
     "apellido y nombre": "nombre_apellido",
+    "nombre": "nombre",
+    "apellido": "apellido",
     "concesionario": "concesionario",
     "credencial": "credencial",
     "tipo de vianda": "tipo_vianda",
@@ -39,6 +41,10 @@ REQUIRED_FIELDS = {"dni", "nombre_apellido"}
 LAYOUT_AUTO = "auto"
 LAYOUT_DNI = "dni"
 LAYOUT_VALTRA_FENDT = "valtra_fendt"
+LAYOUT_VALTRA_FENDT_DNI = "valtra_fendt_dni"
+
+SPLIT_NAME_REQUIRED_FIELDS = {"dni", "nombre", "apellido"}
+CONCESIONARIO_HEADER_TOKENS = {"concesionario", "concesionarios"}
 
 
 def _normalize_header(value: object) -> str:
@@ -111,6 +117,12 @@ def _detect_layout(worksheet) -> str:
         normalized = [_normalize_header(value) for value in row]
         if "credencial" in normalized and "nombre" in normalized and "apellido" in normalized:
             return LAYOUT_VALTRA_FENDT
+
+    try:
+        _find_split_name_header_row(worksheet)
+        return LAYOUT_VALTRA_FENDT_DNI
+    except CommandError:
+        pass
 
     raise CommandError("No se pudo detectar automaticamente el layout del Excel.")
 
@@ -292,6 +304,89 @@ def _match_persona_by_name(
     return None
 
 
+def _find_split_name_header_row(worksheet) -> tuple[int, dict[str, int], int | None]:
+    """Detecta fila de headers con columnas separadas Nombre, Apellido, DNI.
+
+    Devuelve (fila_header, mapeo_columnas, columna_concesionario_o_None).
+    El detector escanea hasta 50 filas; en ese rango identifica:
+    - la fila con los headers DNI + Nombre + Apellido,
+    - opcionalmente la columna del concesionario (si arriba o al costado dice
+      'Concesionario(s)').
+    """
+    concesionario_col: int | None = None
+
+    for row_index, row in enumerate(worksheet.iter_rows(min_row=1, max_row=50, values_only=True), start=1):
+        header_map: dict[str, int] = {}
+        for col_index, raw_cell in enumerate(row):
+            normalized = _normalize_header(raw_cell)
+            if not normalized:
+                continue
+            if normalized in CONCESIONARIO_HEADER_TOKENS and concesionario_col is None:
+                concesionario_col = col_index
+                continue
+            mapped = COLUMN_ALIASES.get(normalized)
+            if mapped and mapped not in header_map:
+                header_map[mapped] = col_index
+
+        if SPLIT_NAME_REQUIRED_FIELDS.issubset(header_map.keys()):
+            return row_index, header_map, concesionario_col
+
+    raise CommandError(
+        "No se encontro una fila de cabecera valida para el layout Valtra/Fendt con DNI. "
+        "Se requieren columnas DNI, Nombre y Apellido por separado."
+    )
+
+
+def _iter_valtra_fendt_dni_rows(worksheet) -> Iterable[dict[str, object]]:
+    header_row, header_map, concesionario_col = _find_split_name_header_row(worksheet)
+
+    dni_col = header_map["dni"]
+    nombre_col = header_map["nombre"]
+    apellido_col = header_map["apellido"]
+    tipo_vianda_col = header_map.get("tipo_vianda")
+    credencial_col = header_map.get("credencial")
+
+    current_concesionario = ""
+
+    for row in worksheet.iter_rows(min_row=header_row + 1, values_only=True):
+        if concesionario_col is not None and len(row) > concesionario_col:
+            raw_conc = _cell_to_text(row[concesionario_col])
+            if raw_conc:
+                current_concesionario = raw_conc
+
+        raw_dni = _cell_to_text(row[dni_col]) if len(row) > dni_col else ""
+        nombre = _cell_to_text(row[nombre_col]) if len(row) > nombre_col else ""
+        apellido = _cell_to_text(row[apellido_col]) if len(row) > apellido_col else ""
+
+        nombre_apellido = " ".join(part for part in [nombre, apellido] if part).strip()
+        dni = normalizar_dni(raw_dni)
+
+        if not dni or not nombre_apellido:
+            yield {"skip": True}
+            continue
+
+        tipo_vianda = (
+            _cell_to_vianda(row[tipo_vianda_col])
+            if tipo_vianda_col is not None and len(row) > tipo_vianda_col
+            else Persona.VIANDA_CLASICO
+        )
+        credencial = (
+            _cell_to_text(row[credencial_col])
+            if credencial_col is not None and len(row) > credencial_col
+            else ""
+        )
+
+        yield {
+            "dni": dni,
+            "nombre_apellido": nombre_apellido,
+            "concesionario": current_concesionario,
+            "credencial": credencial,
+            "tipo_vianda": tipo_vianda,
+            "puede_invitar": _should_enable_guests(nombre_apellido),
+            "activo": True,
+        }
+
+
 class Command(BaseCommand):
     help = "Importa personas desde archivo Excel (XLSX) a la tabla Persona."
 
@@ -318,7 +413,12 @@ class Command(BaseCommand):
         parser.add_argument(
             "--layout",
             type=str,
-            choices=[LAYOUT_AUTO, LAYOUT_DNI, LAYOUT_VALTRA_FENDT],
+            choices=[
+                LAYOUT_AUTO,
+                LAYOUT_DNI,
+                LAYOUT_VALTRA_FENDT,
+                LAYOUT_VALTRA_FENDT_DNI,
+            ],
             default=LAYOUT_AUTO,
             help="Fuerza el parser a usar un layout especifico.",
         )
@@ -349,6 +449,16 @@ class Command(BaseCommand):
             return
         if layout == LAYOUT_VALTRA_FENDT:
             self._import_valtra_fendt_layout(empresa=empresa, worksheet=worksheet)
+            return
+        if layout == LAYOUT_VALTRA_FENDT_DNI:
+            target_sheets = (
+                [workbook[options["sheet"]]]
+                if options["sheet"]
+                else [workbook[name] for name in workbook.sheetnames]
+            )
+            self._import_valtra_fendt_dni_layout(
+                empresa=empresa, worksheets=target_sheets
+            )
             return
 
         raise CommandError(f"Layout no soportado: {layout}")
@@ -467,5 +577,65 @@ class Command(BaseCommand):
                 f"Importacion finalizada para empresa={empresa.codigo}. "
                 f"actualizados={updated} omitidos_sin_match={skipped_unmatched} "
                 f"omitidos_ambiguos={skipped_ambiguous}"
+            )
+        )
+
+    def _import_valtra_fendt_dni_layout(
+        self, *, empresa: Empresa, worksheets: list
+    ) -> None:
+        created = 0
+        updated = 0
+        relinked = 0
+        skipped_empty = 0
+
+        for worksheet in worksheets:
+            self.stdout.write(self.style.WARNING(f"Procesando hoja: {worksheet.title}"))
+            try:
+                records = list(_iter_valtra_fendt_dni_rows(worksheet))
+            except CommandError as exc:
+                self.stdout.write(
+                    self.style.WARNING(f"SKIP hoja {worksheet.title}: {exc}")
+                )
+                continue
+
+            for record in records:
+                if record.get("skip"):
+                    skipped_empty += 1
+                    continue
+
+                dni = str(record["dni"])
+                defaults = {
+                    "nombre_apellido": record["nombre_apellido"],
+                    "concesionario": record["concesionario"],
+                    "credencial": record["credencial"],
+                    "tipo_vianda": record["tipo_vianda"],
+                    "puede_invitar": record["puede_invitar"],
+                    "activo": record["activo"],
+                }
+                obj, was_created, relinked_document = _save_persona_with_dni(
+                    empresa=empresa,
+                    dni=dni,
+                    defaults=defaults,
+                )
+
+                if was_created:
+                    created += 1
+                elif relinked_document:
+                    relinked += 1
+                    updated += 1
+                else:
+                    updated += 1
+
+                self.stdout.write(
+                    f"OK [{empresa.codigo}/{worksheet.title}] {obj.dni} | "
+                    f"{obj.nombre_apellido} | {obj.concesionario} | "
+                    f"vianda={obj.tipo_vianda} | puede_invitar={obj.puede_invitar}"
+                )
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Importacion finalizada para empresa={empresa.codigo}. "
+                f"creados={created} actualizados={updated} relinked={relinked} "
+                f"omitidos={skipped_empty}"
             )
         )
