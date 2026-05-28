@@ -123,35 +123,6 @@ Aplicar esquema y datos base:
 .venv/bin/python manage.py seed_vouchers
 ```
 
-## Migracion de datos desde MySQL a Postgres
-
-Para mover datos productivos de una base MySQL existente a Postgres. **Hacer backup de MySQL antes de cualquier paso.**
-
-```bash
-# 1. En el server MySQL original (con DB_ENGINE=mysql todavia activo en otro checkout/rama si hace falta):
-#    Exportar todo a JSON con natural keys (mas portable que serialized PK).
-.venv/bin/python manage.py dumpdata \
-  --natural-foreign --natural-primary \
-  --exclude=contenttypes --exclude=auth.permission \
-  --exclude=admin.logentry --exclude=sessions \
-  --indent 2 -o /tmp/expo_dump.json
-
-# 2. En el server destino (con DB_ENGINE=postgres y la DB recien creada):
-#    Aplicar el esquema vacio.
-.venv/bin/python manage.py migrate
-
-# 3. Cargar los datos. seed_vouchers NO se corre antes para evitar conflictos.
-.venv/bin/python manage.py loaddata /tmp/expo_dump.json
-
-# 4. Resetear las secuencias de Postgres para que los proximos INSERT no choquen.
-.venv/bin/python manage.py sqlsequencereset core api kiosk tickets | .venv/bin/python manage.py dbshell
-
-# 5. Verificar conteos basicos.
-.venv/bin/python manage.py shell -c "from core.models import Persona, Ticket, CanjeOperacion; print('personas', Persona.objects.count(), 'tickets', Ticket.objects.count(), 'operaciones', CanjeOperacion.objects.count())"
-```
-
-Si el dataset es grande y `loaddata` se hace lento, alternativa: usar [pgloader](https://pgloader.io/) que copia tablas directo de MySQL a Postgres y maneja sequences automaticamente.
-
 ## Importacion desde Excel
 
 Layout con DNI (alta/actualizacion directa, por ejemplo Massey):
