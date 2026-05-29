@@ -529,11 +529,8 @@
   async function printTickets(tickets) {
     if (preferRawBt) {
       const payloads = tickets.map((ticket) => buildRawBtTicketPayload(ticket)).filter(Boolean);
-      for (let index = 0; index < payloads.length; index += 1) {
-        sendToRawBt(payloads[index]);
-        if (index + 1 < payloads.length) {
-          await sleep(RAWBT_PRINT_DELAY_MS);
-        }
+      if (payloads.length > 0) {
+        sendToRawBt(payloads.join(""));
       }
       return;
     }
