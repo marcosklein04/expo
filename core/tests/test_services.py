@@ -34,12 +34,10 @@ def _seed_vouchers() -> None:
         (VoucherTipo.DESAYUNO, 1),
         (VoucherTipo.ALMUERZO, 1),
         (VoucherTipo.MERIENDA, 1),
-        (VoucherTipo.POSTRE, 1),
         (VoucherTipo.INVITADO, 5),
         (VoucherTipo.INVITADO_DESAYUNO, 5),
         (VoucherTipo.INVITADO_ALMUERZO, 5),
         (VoucherTipo.INVITADO_MERIENDA, 5),
-        (VoucherTipo.INVITADO_POSTRE, 5),
     ):
         VoucherTipo.objects.update_or_create(
             codigo=codigo,
@@ -79,12 +77,7 @@ class VoucherServiceTests(TestCase):
         comidas = {item["codigo"]: item for item in payload["comidas"]}
         self.assertEqual(
             set(comidas),
-            {
-                VoucherTipo.DESAYUNO,
-                VoucherTipo.ALMUERZO,
-                VoucherTipo.MERIENDA,
-                VoucherTipo.POSTRE,
-            },
+            {VoucherTipo.DESAYUNO, VoucherTipo.ALMUERZO, VoucherTipo.MERIENDA},
         )
         self.assertEqual(comidas[VoucherTipo.DESAYUNO]["fijos"]["usados_persona"], 0)
         self.assertEqual(comidas[VoucherTipo.DESAYUNO]["fijos"]["cupo_persona"], 1)

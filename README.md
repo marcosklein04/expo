@@ -10,7 +10,7 @@ Aplicacion de kiosco para emision de vouchers con control diario por persona/vou
    - `/totem/massey/`
 2. Ingreso de documento (`.../dni/`) con selector `DNI / PASAPORTE` y teclado nativo Android
 3. Consulta de cupos del dia
-4. Canje de una o varias comidas (desayuno/almuerzo/merienda/postre) con invitados por comida
+4. Canje de una o varias comidas (desayuno/almuerzo/merienda) con invitados por comida. El ticket de almuerzo incluye un postre adicional impreso al final del mismo ticket.
 5. Emision e impresion del ticket (`/tickets/<ticket_numero>/`)
 
 ## API
@@ -37,19 +37,19 @@ Ejemplo `redeem-batch` (desde frontend):
   "items": [
     {"comida": "DESAYUNO", "invitados": 2},
     {"comida": "ALMUERZO", "invitados": 1},
-    {"comida": "MERIENDA", "invitados": 1},
-    {"comida": "POSTRE", "invitados": 1}
+    {"comida": "MERIENDA", "invitados": 1}
   ]
 }
 ```
 
 Reglas principales:
 
-- `DESAYUNO`, `ALMUERZO`, `MERIENDA` y `POSTRE`: maximo 1 fijo por persona por dia.
-- Los invitados usan el mismo pool diario de la comida (`DESAYUNO` / `ALMUERZO` / `MERIENDA` / `POSTRE`) del tótem.
-- Invitados en desayuno/almuerzo/merienda/postre se habilitan si `Persona.puede_invitar=true` o si el nombre está en `KIOSK_SPECIAL_GUEST_NAMES`.
-- Pools diarios configurables por entorno por marca/tótem (desayuno/almuerzo/merienda/postre):
-  `VALTRA` 100/100/100/121, `FENDT` 20/20/20/121, `MASSEY` 121/120/120/121 por defecto.
+- `DESAYUNO`, `ALMUERZO` y `MERIENDA`: maximo 1 fijo por persona por dia.
+- Los invitados usan el mismo pool diario de la comida (`DESAYUNO` / `ALMUERZO` / `MERIENDA`) del tótem.
+- Invitados en desayuno/almuerzo/merienda se habilitan si `Persona.puede_invitar=true` o si el nombre está en `KIOSK_SPECIAL_GUEST_NAMES`.
+- Pools diarios configurables por entorno por marca/tótem (desayuno/almuerzo/merienda):
+  `VALTRA` 100/100/100, `FENDT` 20/20/20, `MASSEY` 121/120/120 por defecto.
+- El postre va incluido automaticamente al final del ticket de almuerzo (propio o invitado) sin cupo ni stock propio.
 - Aislamiento multiempresa: `MASSEY` usa padrón propio; `VALTRA_FENDT` comparte padrón entre ambos tótems.
 - Cada click en `Finalizar e imprimir` se guarda como `CanjeOperacion` con items por comida.
 - Cada ticket queda asociado a su operacion de canje para trazabilidad completa.
@@ -105,15 +105,12 @@ export KIOSK_SPECIAL_GUEST_NAMES="Laura Navas,Gesica Pieditorti"
 export POOL_STOCK_TOTEM_VALTRA_DESAYUNO=100
 export POOL_STOCK_TOTEM_VALTRA_ALMUERZO=100
 export POOL_STOCK_TOTEM_VALTRA_MERIENDA=100
-export POOL_STOCK_TOTEM_VALTRA_POSTRE=121
 export POOL_STOCK_TOTEM_FENDT_DESAYUNO=20
 export POOL_STOCK_TOTEM_FENDT_ALMUERZO=20
 export POOL_STOCK_TOTEM_FENDT_MERIENDA=20
-export POOL_STOCK_TOTEM_FENDT_POSTRE=121
 export POOL_STOCK_TOTEM_MASSEY_DESAYUNO=121
 export POOL_STOCK_TOTEM_MASSEY_ALMUERZO=120
 export POOL_STOCK_TOTEM_MASSEY_MERIENDA=120
-export POOL_STOCK_TOTEM_MASSEY_POSTRE=121
 ```
 
 Aplicar esquema y datos base:

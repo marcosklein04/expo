@@ -371,7 +371,11 @@
     const SEP = "--------------------------------";
     const voucherCode = String(ticket.voucher || "").toUpperCase();
     const isGuestVoucher = voucherCode.includes("INVITADO");
+    const isAlmuerzo = voucherCode === "ALMUERZO" || voucherCode === "INVITADO_ALMUERZO";
     const mealType = String(ticket.tipo_vianda || personaPrintData.tipoVianda || "-");
+    const dia = ticket.dia || formatDate(ticket.creado_en, false);
+    const hora = formatDate(ticket.creado_en, true);
+    const totem = ticket.totem_id || totemId;
 
     let text = ALIGN_CENTER + NORMAL;
     text += BOLD_ON + "EXPOAGRO" + BOLD_OFF + LF;
@@ -390,9 +394,18 @@
     }
     text += ALIGN_LEFT + SEP + LF;
 
-    text += `Dia: ${ticket.dia || formatDate(ticket.creado_en, false)}` + LF;
-    text += `Hora: ${formatDate(ticket.creado_en, true)}` + LF;
-    text += `Totem: ${ticket.totem_id || totemId}` + LF + LF;
+    text += `Dia: ${dia}` + LF;
+    text += `Hora: ${hora}` + LF;
+    text += `Totem: ${totem}` + LF + LF;
+
+    if (isAlmuerzo) {
+      text += ALIGN_LEFT + SEP + LF;
+      text += ALIGN_CENTER + BOLD_ON + "POSTRE" + BOLD_OFF + LF;
+      text += ALIGN_LEFT;
+      text += `Dia: ${dia}` + LF;
+      text += `Hora: ${hora}` + LF;
+      text += `Totem: ${totem}` + LF + LF;
+    }
 
     text += ALIGN_CENTER + (ticket.ticket_numero || "-") + LF;
     text += "Conserve este ticket para validacion" + LF + LF + LF;

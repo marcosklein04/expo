@@ -27,12 +27,10 @@ class ApiTests(TestCase):
             (VoucherTipo.DESAYUNO, 1),
             (VoucherTipo.ALMUERZO, 1),
             (VoucherTipo.MERIENDA, 1),
-            (VoucherTipo.POSTRE, 1),
             (VoucherTipo.INVITADO, 5),
             (VoucherTipo.INVITADO_DESAYUNO, 5),
             (VoucherTipo.INVITADO_ALMUERZO, 5),
             (VoucherTipo.INVITADO_MERIENDA, 5),
-            (VoucherTipo.INVITADO_POSTRE, 5),
         ):
             VoucherTipo.objects.update_or_create(
                 codigo=codigo,
@@ -49,16 +47,11 @@ class ApiTests(TestCase):
         payload = response.json()
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["persona"]["dni"], self.persona.dni)
-        self.assertEqual(len(payload["comidas"]), 4)
+        self.assertEqual(len(payload["comidas"]), 3)
         codigos = {item["codigo"] for item in payload["comidas"]}
         self.assertEqual(
             codigos,
-            {
-                VoucherTipo.DESAYUNO,
-                VoucherTipo.ALMUERZO,
-                VoucherTipo.MERIENDA,
-                VoucherTipo.POSTRE,
-            },
+            {VoucherTipo.DESAYUNO, VoucherTipo.ALMUERZO, VoucherTipo.MERIENDA},
         )
 
     def test_lookup_accepts_passport_alphanumeric(self):

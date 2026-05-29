@@ -171,7 +171,6 @@ class CanjeOperacionItem(models.Model):
         (VoucherTipo.DESAYUNO, "Desayuno"),
         (VoucherTipo.ALMUERZO, "Almuerzo"),
         (VoucherTipo.MERIENDA, "Merienda"),
-        (VoucherTipo.POSTRE, "Postre"),
     ]
 
     operacion = models.ForeignKey(

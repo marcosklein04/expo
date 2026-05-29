@@ -35,11 +35,9 @@
         <th>Voucher Desayuno</th>
         <th>Voucher almuerzo</th>
         <th>Voucher merienda</th>
-        <th>Voucher postre</th>
         <th>invitado desayuno</th>
         <th>invitado almuerzo</th>
         <th>invitado merienda</th>
-        <th>invitado postre</th>
       </tr>
     </thead>
     <tbody>
@@ -50,15 +48,13 @@
           <td>{{ row.voucher_desayuno }}</td>
           <td>{{ row.voucher_almuerzo }}</td>
           <td>{{ row.voucher_merienda }}</td>
-          <td>{{ row.voucher_postre }}</td>
           <td>{{ row.invitado_desayuno }}</td>
           <td>{{ row.invitado_almuerzo }}</td>
           <td>{{ row.invitado_merienda }}</td>
-          <td>{{ row.invitado_postre }}</td>
         </tr>
       {% empty %}
         <tr>
-          <td colspan="10">No hay tickets para el dia seleccionado.</td>
+          <td colspan="8">No hay tickets para el dia seleccionado.</td>
         </tr>
       {% endfor %}
     </tbody>
@@ -68,14 +64,12 @@
         <th>{{ totales.voucher_desayuno }}</th>
         <th>{{ totales.voucher_almuerzo }}</th>
         <th>{{ totales.voucher_merienda }}</th>
-        <th>{{ totales.voucher_postre }}</th>
         <th>{{ totales.invitado_desayuno }}</th>
         <th>{{ totales.invitado_almuerzo }}</th>
         <th>{{ totales.invitado_merienda }}</th>
-        <th>{{ totales.invitado_postre }}</th>
       </tr>
       <tr>
-        <th colspan="9">Total vouchers del dia</th>
+        <th colspan="7">Total vouchers del dia</th>
         <th>{{ totales.total_vouchers }}</th>
       </tr>
     </tfoot>

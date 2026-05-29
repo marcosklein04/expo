@@ -11,12 +11,10 @@ class Command(BaseCommand):
             (VoucherTipo.DESAYUNO, 1),
             (VoucherTipo.ALMUERZO, 1),
             (VoucherTipo.MERIENDA, 1),
-            (VoucherTipo.POSTRE, 1),
             (VoucherTipo.INVITADO, 5),
             (VoucherTipo.INVITADO_DESAYUNO, 5),
             (VoucherTipo.INVITADO_ALMUERZO, 5),
             (VoucherTipo.INVITADO_MERIENDA, 5),
-            (VoucherTipo.INVITADO_POSTRE, 5),
         ]
 
         for codigo, cupo in defaults:

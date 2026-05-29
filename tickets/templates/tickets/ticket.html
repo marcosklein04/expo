@@ -29,7 +29,7 @@
 
     <section class="voucher">{{ ticket.voucher_tipo.codigo }}</section>
 
-    {% if ticket.voucher_tipo.codigo == 'DESAYUNO' or ticket.voucher_tipo.codigo == 'ALMUERZO' or ticket.voucher_tipo.codigo == 'MERIENDA' or ticket.voucher_tipo.codigo == 'POSTRE' %}
+    {% if ticket.voucher_tipo.codigo == 'DESAYUNO' or ticket.voucher_tipo.codigo == 'ALMUERZO' or ticket.voucher_tipo.codigo == 'MERIENDA' %}
       <section class="meta">
         <div><strong>Tipo de comida:</strong> {{ ticket.persona.get_tipo_vianda_display }}</div>
       </section>
@@ -40,6 +40,17 @@
       <div><strong>Hora:</strong> {{ ticket.creado_en|date:'Y-m-d H:i:s' }}</div>
       <div><strong>Tótem:</strong> {{ ticket.totem_id }}</div>
     </section>
+
+    {% if ticket.voucher_tipo.codigo == 'ALMUERZO' or ticket.voucher_tipo.codigo == 'INVITADO_ALMUERZO' %}
+      <section class="meta center">
+        <div style="border-top: 1px dashed #000; margin: 10px 0; padding-top: 10px;">
+          <div class="voucher">POSTRE</div>
+          <div><strong>Día:</strong> {{ ticket.dia|date:'Y-m-d' }}</div>
+          <div><strong>Hora:</strong> {{ ticket.creado_en|date:'Y-m-d H:i:s' }}</div>
+          <div><strong>Tótem:</strong> {{ ticket.totem_id }}</div>
+        </div>
+      </section>
+    {% endif %}
 
     <section class="tiny center">
       <div>{{ ticket.ticket_numero }}</div>
