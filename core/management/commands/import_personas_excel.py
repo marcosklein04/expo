@@ -42,9 +42,21 @@ LAYOUT_AUTO = "auto"
 LAYOUT_DNI = "dni"
 LAYOUT_VALTRA_FENDT = "valtra_fendt"
 LAYOUT_VALTRA_FENDT_DNI = "valtra_fendt_dni"
+LAYOUT_MASSEY_DODECAEDRO = "massey_dodecaedro"
 
 SPLIT_NAME_REQUIRED_FIELDS = {"dni", "nombre", "apellido"}
 CONCESIONARIO_HEADER_TOKENS = {"concesionario", "concesionarios"}
+VIANDA_HEADER_TOKENS = {
+    "clasico": "CLASICO",
+    "clasica": "CLASICO",
+    "vegetariano": "VEGETARIANO",
+    "vegetariana": "VEGETARIANO",
+    "celiaco": "CELIACO",
+    "celiaca": "CELIACO",
+    "sin tacc": "CELIACO",
+    "sintacc": "CELIACO",
+    "sin gluten": "CELIACO",
+}
 
 
 def _normalize_header(value: object) -> str:
@@ -387,6 +399,99 @@ def _iter_valtra_fendt_dni_rows(worksheet) -> Iterable[dict[str, object]]:
         }
 
 
+def _find_massey_header_row(
+    worksheet,
+) -> tuple[int, dict[str, int], int | None, dict[str, int]]:
+    """Detecta fila de headers del layout Massey/Dodecaedro.
+
+    Devuelve (fila_header, mapeo_columnas, columna_concesionario, columnas_vianda).
+    Busca DNI + Nombre y Apellido (combinado) + columna Concesionario (mergeada)
+    + tres columnas Clasico/Vegetariano/Celiaco con marca X.
+    """
+    for row_index, row in enumerate(
+        worksheet.iter_rows(min_row=1, max_row=50, values_only=True), start=1
+    ):
+        header_map: dict[str, int] = {}
+        concesionario_col: int | None = None
+        vianda_cols: dict[str, int] = {}
+
+        for col_index, raw_cell in enumerate(row):
+            normalized = _normalize_header(raw_cell)
+            if not normalized:
+                continue
+            if normalized in CONCESIONARIO_HEADER_TOKENS and concesionario_col is None:
+                concesionario_col = col_index
+                continue
+            if normalized in VIANDA_HEADER_TOKENS:
+                vianda_codigo = VIANDA_HEADER_TOKENS[normalized]
+                if vianda_codigo not in vianda_cols:
+                    vianda_cols[vianda_codigo] = col_index
+                continue
+            mapped = COLUMN_ALIASES.get(normalized)
+            if mapped and mapped not in header_map:
+                header_map[mapped] = col_index
+
+        if REQUIRED_FIELDS.issubset(header_map.keys()):
+            return row_index, header_map, concesionario_col, vianda_cols
+
+    raise CommandError(
+        "No se encontro fila de cabecera valida para el layout Massey/Dodecaedro. "
+        "Se requieren columnas DNI y Nombre y Apellido."
+    )
+
+
+def _iter_massey_dodecaedro_rows(worksheet) -> Iterable[dict[str, object]]:
+    header_row, header_map, concesionario_col, vianda_cols = _find_massey_header_row(worksheet)
+
+    dni_col = header_map["dni"]
+    nombre_col = header_map["nombre_apellido"]
+    credencial_col = header_map.get("credencial")
+
+    current_concesionario = ""
+
+    for row in worksheet.iter_rows(min_row=header_row + 1, values_only=True):
+        if concesionario_col is not None and len(row) > concesionario_col:
+            raw_conc = _cell_to_text(row[concesionario_col])
+            if raw_conc:
+                current_concesionario = raw_conc
+
+        raw_dni = _cell_to_text(row[dni_col]) if len(row) > dni_col else ""
+        nombre_apellido = _cell_to_text(row[nombre_col]) if len(row) > nombre_col else ""
+        dni = normalizar_dni(raw_dni)
+
+        if not dni or not nombre_apellido:
+            yield {"skip": True}
+            continue
+
+        tipo_vianda = Persona.VIANDA_CLASICO
+        for vianda_codigo, col in vianda_cols.items():
+            if col >= len(row):
+                continue
+            cell = row[col]
+            if cell is None:
+                continue
+            cell_text = str(cell).strip()
+            if cell_text and cell_text != "0":
+                tipo_vianda = vianda_codigo
+                break
+
+        credencial = (
+            _cell_to_text(row[credencial_col])
+            if credencial_col is not None and len(row) > credencial_col
+            else ""
+        )
+
+        yield {
+            "dni": dni,
+            "nombre_apellido": nombre_apellido,
+            "concesionario": current_concesionario,
+            "credencial": credencial,
+            "tipo_vianda": tipo_vianda,
+            "puede_invitar": _should_enable_guests(nombre_apellido),
+            "activo": True,
+        }
+
+
 class Command(BaseCommand):
     help = "Importa personas desde archivo Excel (XLSX) a la tabla Persona."
 
@@ -418,6 +523,7 @@ class Command(BaseCommand):
                 LAYOUT_DNI,
                 LAYOUT_VALTRA_FENDT,
                 LAYOUT_VALTRA_FENDT_DNI,
+                LAYOUT_MASSEY_DODECAEDRO,
             ],
             default=LAYOUT_AUTO,
             help="Fuerza el parser a usar un layout especifico.",
@@ -459,6 +565,9 @@ class Command(BaseCommand):
             self._import_valtra_fendt_dni_layout(
                 empresa=empresa, worksheets=target_sheets
             )
+            return
+        if layout == LAYOUT_MASSEY_DODECAEDRO:
+            self._import_massey_dodecaedro_layout(empresa=empresa, worksheet=worksheet)
             return
 
         raise CommandError(f"Layout no soportado: {layout}")
@@ -631,6 +740,54 @@ class Command(BaseCommand):
                     f"{obj.nombre_apellido} | {obj.concesionario} | "
                     f"vianda={obj.tipo_vianda} | puede_invitar={obj.puede_invitar}"
                 )
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Importacion finalizada para empresa={empresa.codigo}. "
+                f"creados={created} actualizados={updated} relinked={relinked} "
+                f"omitidos={skipped_empty}"
+            )
+        )
+
+    def _import_massey_dodecaedro_layout(self, *, empresa: Empresa, worksheet) -> None:
+        created = 0
+        updated = 0
+        relinked = 0
+        skipped_empty = 0
+
+        for record in _iter_massey_dodecaedro_rows(worksheet):
+            if record.get("skip"):
+                skipped_empty += 1
+                continue
+
+            dni = str(record["dni"])
+            defaults = {
+                "nombre_apellido": record["nombre_apellido"],
+                "concesionario": record["concesionario"],
+                "credencial": record["credencial"],
+                "tipo_vianda": record["tipo_vianda"],
+                "puede_invitar": record["puede_invitar"],
+                "activo": record["activo"],
+            }
+            obj, was_created, relinked_document = _save_persona_with_dni(
+                empresa=empresa,
+                dni=dni,
+                defaults=defaults,
+            )
+
+            if was_created:
+                created += 1
+            elif relinked_document:
+                relinked += 1
+                updated += 1
+            else:
+                updated += 1
+
+            self.stdout.write(
+                f"OK [{empresa.codigo}] {obj.dni} | {obj.nombre_apellido} | "
+                f"{obj.concesionario} | vianda={obj.tipo_vianda} | "
+                f"puede_invitar={obj.puede_invitar}"
+            )
 
         self.stdout.write(
             self.style.SUCCESS(
