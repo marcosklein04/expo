@@ -378,7 +378,7 @@
     const totem = ticket.totem_id || totemId;
 
     let text = ALIGN_CENTER + NORMAL;
-    text += BOLD_ON + "EXPOAGRO" + BOLD_OFF + LF;
+    text += BOLD_ON + "AGROACTIVA" + BOLD_OFF + LF;
     text += "Voucher de comida" + LF + LF;
 
     text += ALIGN_LEFT;
