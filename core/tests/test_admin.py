@@ -60,3 +60,34 @@ class TicketAdminSummaryTests(TestCase):
         self.assertContains(response, 'value="2026-03-06"', html=False)
         self.assertContains(response, "Ada Lovelace")
         self.assertNotContains(response, "Grace Hopper")
+
+    def test_csv_export_splits_by_totem_and_includes_totals(self):
+        Ticket.objects.create(
+            persona=self.persona_hoy,
+            voucher_tipo=self.voucher,
+            dia=date(2026, 3, 6),
+            totem_id="TOTEM_VALTRA",
+            ticket_numero="TICKET-20260306-1",
+        )
+        Ticket.objects.create(
+            persona=self.persona_hoy,
+            voucher_tipo=self.voucher,
+            dia=date(2026, 3, 6),
+            totem_id="TOTEM_FENDT",
+            ticket_numero="TICKET-20260306-2",
+        )
+
+        response = self.client.get(
+            reverse("admin:core_ticket_export_resumen_dia"),
+            {"dia": "2026-03-06"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode("utf-8")
+        self.assertIn("Totem", body.splitlines()[0])
+        # La misma persona aparece una fila por cada totem donde canjeo.
+        self.assertIn("TOTEM_VALTRA", body)
+        self.assertIn("TOTEM_FENDT", body)
+        # Fila de totales: 1 persona distinta y 2 vouchers de desayuno en total.
+        self.assertIn("1 personas", body)
+        self.assertIn("Total vouchers del dia", body)

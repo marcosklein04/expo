@@ -122,6 +122,7 @@ class TicketAdmin(admin.ModelAdmin):
             .values(
                 "persona__dni",
                 "persona__nombre_apellido",
+                "totem_id",
             )
             .annotate(
                 voucher_desayuno=Count(
@@ -149,58 +150,14 @@ class TicketAdmin(admin.ModelAdmin):
                     filter=Q(voucher_tipo__codigo=VoucherTipo.INVITADO_MERIENDA),
                 ),
             )
-            .order_by("persona__nombre_apellido", "persona__dni")
+            .order_by("persona__nombre_apellido", "persona__dni", "totem_id")
         )
         return dia, resumen
 
-    def _build_resumen_response_dia(self, request):
-        dia, resumen = self._build_resumen_queryset_dia(request)
-        dia_csv = dia.strftime("%d/%m/%y")
-
-        response = HttpResponse(content_type="text/csv; charset=utf-8")
-        response["Content-Disposition"] = (
-            f'attachment; filename="tickets_resumen_{dia}.csv"'
-        )
-        response.write("\ufeff")
-
-        writer = csv.writer(response, delimiter=";")
-        writer.writerow(
-            [
-                "Fecha",
-                "DNI/Pasaporte",
-                "Nombre y apellido",
-                "Voucher Desayuno",
-                "Voucher almuerzo",
-                "Voucher merienda",
-                "invitado desayuno",
-                "invitado almuerzo",
-                "invitado merienda",
-            ]
-        )
-
-        for row in resumen.iterator():
-            writer.writerow(
-                [
-                    dia_csv,
-                    row["persona__dni"],
-                    row["persona__nombre_apellido"],
-                    row["voucher_desayuno"],
-                    row["voucher_almuerzo"],
-                    row["voucher_merienda"],
-                    row["invitado_desayuno"],
-                    row["invitado_almuerzo"],
-                    row["invitado_merienda"],
-                ]
-            )
-
-        return response
-
-    def ver_resumen_dia(self, request):
-        dia, resumen = self._build_resumen_queryset_dia(request)
-        filas = list(resumen)
-
+    @staticmethod
+    def _calcular_totales(filas):
         totales = {
-            "personas": len(filas),
+            "personas": len({(f["persona__dni"], f["persona__nombre_apellido"]) for f in filas}),
             "voucher_desayuno": sum(int(f["voucher_desayuno"]) for f in filas),
             "voucher_almuerzo": sum(int(f["voucher_almuerzo"]) for f in filas),
             "voucher_merienda": sum(int(f["voucher_merienda"]) for f in filas),
@@ -216,6 +173,87 @@ class TicketAdmin(admin.ModelAdmin):
             + totales["invitado_almuerzo"]
             + totales["invitado_merienda"]
         )
+        return totales
+
+    def _build_resumen_response_dia(self, request):
+        dia, resumen = self._build_resumen_queryset_dia(request)
+        filas = list(resumen)
+        totales = self._calcular_totales(filas)
+        dia_csv = dia.strftime("%d/%m/%y")
+
+        response = HttpResponse(content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = (
+            f'attachment; filename="tickets_resumen_{dia}.csv"'
+        )
+        response.write("\ufeff")
+
+        writer = csv.writer(response, delimiter=";")
+        writer.writerow(
+            [
+                "Fecha",
+                "DNI/Pasaporte",
+                "Nombre y apellido",
+                "Totem",
+                "Voucher Desayuno",
+                "Voucher almuerzo",
+                "Voucher merienda",
+                "invitado desayuno",
+                "invitado almuerzo",
+                "invitado merienda",
+            ]
+        )
+
+        for row in filas:
+            writer.writerow(
+                [
+                    dia_csv,
+                    row["persona__dni"],
+                    row["persona__nombre_apellido"],
+                    row["totem_id"],
+                    row["voucher_desayuno"],
+                    row["voucher_almuerzo"],
+                    row["voucher_merienda"],
+                    row["invitado_desayuno"],
+                    row["invitado_almuerzo"],
+                    row["invitado_merienda"],
+                ]
+            )
+
+        writer.writerow(
+            [
+                "TOTALES",
+                "",
+                f"{totales['personas']} personas",
+                "",
+                totales["voucher_desayuno"],
+                totales["voucher_almuerzo"],
+                totales["voucher_merienda"],
+                totales["invitado_desayuno"],
+                totales["invitado_almuerzo"],
+                totales["invitado_merienda"],
+            ]
+        )
+        writer.writerow(
+            [
+                "Total vouchers del dia",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                totales["total_vouchers"],
+            ]
+        )
+
+        return response
+
+    def ver_resumen_dia(self, request):
+        dia, resumen = self._build_resumen_queryset_dia(request)
+        filas = list(resumen)
+        totales = self._calcular_totales(filas)
 
         context = {
             **self.admin_site.each_context(request),

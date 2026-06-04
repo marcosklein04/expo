@@ -32,6 +32,7 @@
       <tr>
         <th>DNI/Pasaporte</th>
         <th>Nombre y apellido</th>
+        <th>Totem</th>
         <th>Voucher Desayuno</th>
         <th>Voucher almuerzo</th>
         <th>Voucher merienda</th>
@@ -45,6 +46,7 @@
         <tr>
           <td>{{ row.persona__dni }}</td>
           <td>{{ row.persona__nombre_apellido }}</td>
+          <td>{{ row.totem_id }}</td>
           <td>{{ row.voucher_desayuno }}</td>
           <td>{{ row.voucher_almuerzo }}</td>
           <td>{{ row.voucher_merienda }}</td>
@@ -54,13 +56,13 @@
         </tr>
       {% empty %}
         <tr>
-          <td colspan="8">No hay tickets para el dia seleccionado.</td>
+          <td colspan="9">No hay tickets para el dia seleccionado.</td>
         </tr>
       {% endfor %}
     </tbody>
     <tfoot>
       <tr>
-        <th colspan="2">Totales ({{ totales.personas }} personas)</th>
+        <th colspan="3">Totales ({{ totales.personas }} personas)</th>
         <th>{{ totales.voucher_desayuno }}</th>
         <th>{{ totales.voucher_almuerzo }}</th>
         <th>{{ totales.voucher_merienda }}</th>
@@ -69,7 +71,7 @@
         <th>{{ totales.invitado_merienda }}</th>
       </tr>
       <tr>
-        <th colspan="7">Total vouchers del dia</th>
+        <th colspan="8">Total vouchers del dia</th>
         <th>{{ totales.total_vouchers }}</th>
       </tr>
     </tfoot>
