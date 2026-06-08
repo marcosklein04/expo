@@ -122,6 +122,7 @@ class TicketAdmin(admin.ModelAdmin):
             .values(
                 "persona__dni",
                 "persona__nombre_apellido",
+                "persona__concesionario",
                 "totem_id",
             )
             .annotate(
@@ -185,7 +186,7 @@ class TicketAdmin(admin.ModelAdmin):
         response["Content-Disposition"] = (
             f'attachment; filename="tickets_resumen_{dia}.csv"'
         )
-        response.write("\ufeff")
+        response.write("﻿")
 
         writer = csv.writer(response, delimiter=";")
         writer.writerow(
@@ -193,6 +194,7 @@ class TicketAdmin(admin.ModelAdmin):
                 "Fecha",
                 "DNI/Pasaporte",
                 "Nombre y apellido",
+                "Concesionario",
                 "Totem",
                 "Voucher Desayuno",
                 "Voucher almuerzo",
@@ -209,6 +211,7 @@ class TicketAdmin(admin.ModelAdmin):
                     dia_csv,
                     row["persona__dni"],
                     row["persona__nombre_apellido"],
+                    row["persona__concesionario"],
                     row["totem_id"],
                     row["voucher_desayuno"],
                     row["voucher_almuerzo"],
@@ -225,6 +228,7 @@ class TicketAdmin(admin.ModelAdmin):
                 "",
                 f"{totales['personas']} personas",
                 "",
+                "",
                 totales["voucher_desayuno"],
                 totales["voucher_almuerzo"],
                 totales["voucher_merienda"],
@@ -236,6 +240,7 @@ class TicketAdmin(admin.ModelAdmin):
         writer.writerow(
             [
                 "Total vouchers del dia",
+                "",
                 "",
                 "",
                 "",
